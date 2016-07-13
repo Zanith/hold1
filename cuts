@@ -1,0 +1,36 @@
+step_algo
+
+
+    def check_for_Q_values(self, _config):
+        """
+        Make a string for the pre exponential Q or R values that account for the increase in the rate
+        of ion movement due to electrostatic repulsion
+        :param _config: configuration of the channel to find the Q values for
+        :return: string that has the q
+        """
+        _list = []  # for more than 2 sites there can be multiple ion - ion interactions
+        for i, site in enumerate(_config):  # go through each site
+            if site != 0:  # and check if it is occupied by an ion (i.e. != 0)
+                ion_list_index = self.list_ions.index(site)
+                _charge = self.ion_charges[ion_list_index]
+                _list.append(QClass(_charge, i))
+        _q_str = []
+        total_charge = 0
+        for i in range(len(_list)):
+            for j in range(i+1, len(_list)):
+                if self.q_type == "different":
+                    _q_str.append('Q'
+                                  + _list[i].place
+                                  + _list[j].place
+                                  + power_symbol
+                                  + str(_list[i].charge*_list[j].charge))
+                elif self.q_type == "single":
+                    total_charge += _list[i].charge*_list[j].charge
+                    # _q_str.append('Q**'+str(_list[i].charge*_list[j].charge))
+                else:
+                    raise IOError("q_type entry must be: 'None', 'different', or 'single'")
+        if total_charge != 0:  # q_type must be single
+            return "Q" + power_symbol + str(total_charge) + " * "
+        if _q_str:
+            return " * ".join(_q_str) + " * "
+        else:
