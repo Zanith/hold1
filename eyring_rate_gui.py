@@ -1,6 +1,7 @@
 __author__ = 'Kyle Vitautas Lopin'
 
 import Tkinter as tk
+import tkFileDialog
 import gui_parameter_frame as param_frame
 import gui_simulation_frame as sim_frame
 import template_maker as script_maker
@@ -8,64 +9,72 @@ import eyring_rate_script
 import result_toplevel
 
 max_charge = 5
+FILEOPTIONS = {'defaultextension': '*.ert_model'}
 
 
 class EyringGUI(tk.Tk):
+    """
+    A graphical user interface to make a multiple binding site Eyring rate model and to view the
+    resulting transport rates
+    """
     def __init__(self, parent=None):
+        """
+        Make the initiale frame for the user to select the number of binding sites and the solutes to model.
+        The user also enters the charge of each solute and selects if repulsion factor should be used.  The user
+        can also select to use the mpmath package to solve the problem with
+        """
         tk.Tk.__init__(self, parent)
+        # initialize variables to be used later
+        self.Q_value = None  # not sure why but these need to be passed this way
+        self.R_value = None
+        self.parameter_frame = None
+        self.simulation_frame = None
+        self.run_button = None
+
         self.top_frame = tk.Frame(self)
         self.top_frame.pack(side='top')
         self.bottom_button_frame = tk.Frame(self)
         self.bottom_button_frame.pack(side='top')
+        # frame to pack run simulation button in after initialization
         self.run_button_frame = tk.Frame(self.bottom_button_frame)
         self.run_button_frame.pack(side='top')
 
-        initial_frame = InitialFrame(self.top_frame)
+        self.initial_frame = InitialFrame(self.top_frame)  # hacked it to self to make menu work
+
+        # make the Menu bar
+        self.make_menubar()
+
         self.hold_parameter_frame = tk.Frame(self.top_frame)
-        self.parameter_frame = None
-        self.simulation_frame = None
-        self.run_button = None
-        initial_frame.pack(side='left', anchor='n')
-        make_params_button = tk.Button(initial_frame, text="Set model parameters",
-                                       command=lambda: self.process_parameters(initial_frame))
+
+        self.initial_frame.pack(side='left', anchor='n')
+        make_params_button = tk.Button(self.initial_frame, text="Set model parameters",
+                                       command=lambda: self.process_parameters(self.initial_frame))
         make_params_button.pack(side='bottom')
 
     def process_parameters(self, initial_settings):
         """
         Process information to properly set the initial settings
         """
-        if initial_settings.Q_value_used:
-            Q_value = initial_settings.Q_entry.get()
-        else:
-            Q_value = None
         if initial_settings.R_value_used:
-            R_value = initial_settings.R_entry.get()
             R_str = "R"
         else:
-            R_value = None
             R_str = ""
 
-        # make a list of the solute texts by getting them from the tkinter varstring
-        solutes = []
-        for _solute in initial_settings.solutes:
-            solute = _solute.get()
-            solutes.append(solute.replace(" ", "_"))
-        # solutes = [i.get().replace(" ", "_") for i in initial_settings.solutes]
-
-        # make a list of the charges used
-        charges = [i.get() for i in initial_settings.charges]
         num_binding_sites = initial_settings.num_binding_sites.get()
 
+        solutes, charges = self.get_settings(initial_settings)
+
+        print 'making script with num binding sties= ', num_binding_sites
         QR_str = "single Q" + R_str
-        print "make script with variables:"
-        print "num binding sites: ", num_binding_sites
-        print 'solutes: ', solutes
-        print "charges: ", charges
-        print "QR string: ", QR_str
 
         # make the script for the Eyring rate model
-
-        _eyring_rate_script = script_maker.make_template("numpy", num_binding_sites,
+        print 'mpmath used = ', initial_settings.mpmath_used
+        if initial_settings.mpmath_used:
+            math_package = 'mpmath'
+        else:
+            math_package = 'numpy'
+        print 'math package: ', math_package
+        _eyring_rate_script = script_maker.make_template(math_package, num_binding_sites,
                                                          solutes, charges, QR_str)
         with open("eyring_rate_script.py", "w") as _file:
             _file.write(_eyring_rate_script)
@@ -74,10 +83,9 @@ class EyringGUI(tk.Tk):
 
         self.set_parameters(solutes,
                             initial_settings.charges,
-                            initial_settings.num_binding_sites.get(),
-                            Q_value, R_value)
+                            initial_settings.num_binding_sites.get())
 
-    def set_parameters(self, solute_text, charges, num_binding_sites, Q_value, R_value):
+    def set_parameters(self, solute_text, charges, num_binding_sites):
         saved_params = None
         if self.parameter_frame:
             # take the old parameters of the frame and pass them to the new frame to make it with
@@ -89,7 +97,7 @@ class EyringGUI(tk.Tk):
         self.parameter_frame = param_frame.ParameterSelectionFrame(self.hold_parameter_frame,
                                                                    solute_text, charges,
                                                                    num_binding_sites,
-                                                                   Q_value, R_value,
+                                                                   self.Q_value, self.R_value,
                                                                    saved_params)
         self.parameter_frame.pack(side='left', expand=True, fill=tk.X)
 
@@ -101,67 +109,124 @@ class EyringGUI(tk.Tk):
 
         self.simulation_frame = sim_frame.SimulationWindow(self.top_frame, solute_text, _saved_sim_params)
         self.simulation_frame.pack(side='left')
-
         if not self.run_button:
             self.run_button = tk.Button(self.run_button_frame, text="Run Simulation full",
-                                        command=lambda: self.run_simulation(num_binding_sites, Q_value, R_value))
+                                        command=lambda: self.run_simulation(num_binding_sites))
             self.run_button.pack()
+        else:
+            self.run_button.config(command=lambda: self.run_simulation(num_binding_sites))  # hackish
 
         num_solutes = len(solute_text)
         _heigth = int(69 * num_solutes + 450)
         _width = int(88 * num_binding_sites + 980)
         self.geometry("%dx%d" % (_width, _heigth))
 
-    def run_simulation(self, num_sites, Q, R):
-        print "run simulation"
+    def run_simulation(self, num_sites):
         voltages, concentrations, conc_labels = self.simulation_frame.get_run_simulation_settings()
-        print 'voltages: ', voltages
-        print "concentrations: ", concentrations
-        print "energy barriers: ", self.parameter_frame.energy_barriers
-        print "num sites: ", num_sites
-
-        if not Q:
-            Q = [1]  # hack
-        print 'Qs: ', Q
-        print 'Rs: ', R
+        if not self.Q_value:
+            self.Q_value = [1]  # hack
         barriers = self.parameter_frame.energy_barriers
-        # results have have the class
-        results_eig, results_svd = eyring_rate_script.eyring_rate_algo(voltages, concentrations,
-                                                                       barriers,
-                                                                       num_barriers=num_sites,
-                                                                       Qs=Q, Rs=R)
-        ions_transported = dict()
-        transport_errors = dict()
-        current = []
+        """
+        results have the class Results found in numpy_helper_functions and has the attributes
+        voltage, matrix_specs, ion_transport self.fitting,  current and steady_state
+        """
+        results_eig, results_svd, results_qr = eyring_rate_script.eyring_rate_algo(voltages, concentrations,
+                                                                                   barriers,
+                                                                                   num_barriers=num_sites,
+                                                                                   Qs=self.Q_value, Rs=self.R_value)
+
         solutes = []
-        int_ss = []
         for solute in results_eig[0].ion_transport:
             solutes.append(solute)
-            ions_transported[solute] = []
-            transport_errors[solute] = []
-        for result in results_eig:
-            int_ss.append(result.steady_state)
-            current.append(result.current[0])
-            for solute in result.ion_transport:
-                # get the ions transported over the 2nd barrier
-                ions_transported[solute].append(result.ion_transport[solute][1])
-                # get errors calculated for the ions transported over the different barriers
-                transport_errors[solute].append(max(result.ion_transport[solute])-min(result.ion_transport[solute]))
-        print 'ions transported'
-        print ions_transported
-        print 'int ss: ', int_ss
-        print transport_errors
-        print current
-        print solutes, len(solutes)
-        if len(solutes) < 2:
-            size = (2, 2)
-        elif len(solutes) > 3:
-            size = (3, 3)
+
+        result_toplevel.MultiPlotWindows(self, voltages, barriers, results_eig, solutes, conc_labels, "Eig results")
+
+        result_toplevel.MultiPlotWindows(self, voltages, barriers, results_svd, solutes, conc_labels, "SVD results")
+
+        result_toplevel.MultiPlotWindows(self, voltages, barriers, results_qr, solutes, conc_labels, "QR results")
+
+    def get_settings(self, initial_settings):
+        if initial_settings.Q_value_used:
+            self.Q_value = [float(initial_settings.Q_entry.get())]  # hack
         else:
-            size = (2, 3)
-        print 'size: ', size
-        result_toplevel.MultiPlotWindows(self, voltages, current, ions_transported,
-                                         barriers, conc_labels, solutes, size)
+            self.Q_value = None
+        if initial_settings.R_value_used:
+            self.R_value = initial_settings.R_entry.get()
+        else:
+            self.R_value = None
+
+        # make a list of the solute texts by getting them from the tkinter varstring
+        solutes = []
+        for _solute in initial_settings.solutes:
+            solute = _solute.get()
+            solutes.append(solute.replace(" ", "_"))  # replace spaces because they can not be used for variable names
+        # solutes = [i.get().replace(" ", "_") for i in initial_settings.solutes]
+
+        # make a list of the charges used, the fancy way
+        charges = [i.get() for i in initial_settings.charges]
+
+        return solutes, charges
+
+    def make_menubar(self):
+        menubar = tk.Menu(self)
+        filemenu = tk.Menu(menubar, tearoff=0)
+        filemenu.add_command(label="Open", command=self.open_file)
+        filemenu.add_command(label="Save", command=self.save_settings)
+        filemenu.add_separator()
+        filemenu.add_command(label="Exit", command=self.quit)
+        menubar.add_cascade(label="File", menu=filemenu)
+        self.config(menu=menubar)
+
+    def open_file(self):
+        print 'open file, not implemented yet'
+        filename = tkFileDialog.askopenfilename()
+        with open(filename, 'r') as model_file:
+            model = model_file.read()
+            num_sites_1 = model.index("num sites: ")
+            print 'check 1', num_sites_1
+            num_sites = self.find_between(model, 'num sites: ', '\n')
+            print 'check 2', model.split('num sites: ', 1)[1][1]
+
+    def find_between(self, target, _start, _end):
+        """
+        return the substring between the strings _start and _end
+        """
+        return target.split(_start)[1].split(_end)[0]
+
+
+    def save_settings(self):
+        """
+        Save the settings of the model into a file so the user can load them later
+        """
+        solutes, charges = self.get_settings(self.initial_frame)
+        if self.initial_frame.Q_value_used:
+            _Qstr = 'Q factor: ' + self.initial_frame.Q_value.get()
+        else:
+            _Qstr = 'no Q factor'
+
+        filename = tkFileDialog.asksaveasfilename(**FILEOPTIONS)
+
+        with open(filename, 'w') as model_file:
+            model_file.write('num sites: %d\n' % self.initial_frame.num_binding_sites.get())
+            model_file.write('num solutes: %d\n' % self.initial_frame.num_solutes_entries)
+            model_file.write('solutes: ')
+            for solute in solutes:
+                model_file.write('%s ' % solute)
+            model_file.write('\nchargea: ')
+            for charge in charges:
+                model_file.write('%d ' % charge)
+            model_file.write('\n%s\n' % _Qstr)
+            if self.parameter_frame:
+                model_file.write('energy barriers: ')
+                for k, v in self.parameter_frame.energy_barriers.items():
+                    v_str = ', '.join(map(str, v))
+                    model_file.write('%s: %s\n' % (k, v_str))
+                voltages, concentrations = self.simulation_frame.get_settings()
+                voltage_str = ', '.join(map(str, voltages))
+                model_file.write('voltages: %s\nsolute concentrations:\n' % voltage_str)
+                for k, v in concentrations.items():
+                    conc_str = str(v[0]) + v[1]
+                    model_file.write('%s: %s\n' % (k, conc_str))
 
 
 class InitialFrame(tk.Frame):
@@ -185,6 +250,7 @@ class InitialFrame(tk.Frame):
         self.R_value_used = False  # to tell if the user wants to use a R value
         self.Q_entry = None  # initialize
         self.R_entry = None  # initialize
+        self.mpmath_used = False
 
         # make region for the user to select the number of binding sites and bind the number to self.num_binding_sites
         self.num_binding_sites = tk.IntVar()
@@ -220,6 +286,12 @@ class InitialFrame(tk.Frame):
         self.R_on_off = tk.IntVar()
         self.R_value = tk.StringVar()
         self.make_Q_R_boxes()
+
+        # allow the user to use the mpmath package
+        self.mpmath_used_var = tk.IntVar()
+        tk.Checkbutton(self, text="Use mpmath?",
+                       variable=self.mpmath_used_var,
+                       command=self.set_math_package).pack(side='bottom')
 
     def make_Q_R_boxes(self):
         QR_frame = tk.Frame(self)
@@ -318,6 +390,9 @@ class InitialFrame(tk.Frame):
         item.destroy()
         self.num_solutes_entries -= 1
         self.pack()
+
+    def set_math_package(self):
+        self.mpmath_used = self.mpmath_used_var.get()
 
 
 if __name__ == '__main__':
