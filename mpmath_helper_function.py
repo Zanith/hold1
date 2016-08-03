@@ -1,7 +1,60 @@
-from mpmath import mp, eig, fsum, fabs, matrix, inverse, norm, nprint, fp
+from mpmath import mp, eig, fsum, fabs, norm, qr, mnorm
+
+import eyring_rate_script as eyring_script
 
 
 __author__ = 'Kyle Vitautas Lopin'
+
+
+def solve_eyring_rate_model(voltage, transition_matrix):
+    # get the largest and smallest elements from the matrix to characterize the difficulty of solving null
+    # space of the matrix and save it to be retrieved later
+    largest_matrix_element, smallest_matrix_element = smallest_largest_elements(transition_matrix)
+    condition_number = cond(transition_matrix)
+    matrix_specs = MatrixSpecs(largest_matrix_element,
+                               smallest_matrix_element,
+                               condition_number)
+
+    # 2a eig: get the steady state (ss) solution by using the eigenvector of the lowest eigenvalue
+    ss_by_eig, test_eigs_by_eig = steady_state_eig(transition_matrix)
+
+    # save all the results in a custom data class and return it
+    results_eig = solve_eyring_rate_model_ss(voltage, ss_by_eig,
+                                             transition_matrix, test_eigs_by_eig,
+                                             matrix_specs)
+
+    ss_by_svd, test_eig_by_svd = svd_func(transition_matrix)
+
+    if any(ss_by_svd):  # incase the svd fails because of singularity
+        results_svd = solve_eyring_rate_model_ss(voltage, ss_by_svd,
+                                                 transition_matrix, test_eig_by_svd,
+                                                 matrix_specs)
+    else:
+        results_svd = results_eig  # hack to make the program work
+
+    ss_by_qr, test_eig_by_qr = qr_func(transition_matrix)
+
+    results_qr = solve_eyring_rate_model_ss(voltage, ss_by_qr,
+                                            transition_matrix, test_eig_by_qr,
+                                            matrix_specs)
+
+    return results_eig, results_svd, results_qr
+
+
+def solve_eyring_rate_model_ss(voltage, _ss, _matrix, _test, _specs):
+    # 3 calculate the ion transport rates
+    solute_transport = eyring_script.eyring_rate_transport(_ss)
+    # characterize how well the steady state is by getting the residues of the steady state times the transition matrix
+    sum_squared_errors, sum_absolute_errors = characterize_solution(_ss, _matrix)
+
+    # 4 calculate the current from the solute transport rates
+    current = eyring_script.current_calc(solute_transport)
+
+    # save the fitting results in a custom class
+    fitting_specs_eig = FittingMetrics(_test, sum_absolute_errors, sum_squared_errors, solute_transport)
+
+    return Results(voltage, _specs, solute_transport, fitting_specs_eig,
+                   current, _ss)
 
 
 def svd_func(_matrix):
@@ -13,9 +66,7 @@ def svd_func(_matrix):
 
 
 def steady_state_eig(_matrix):
-    print 'test c'
     values, vectors = eig(_matrix)
-    print 'test d'
     real_values = []
     for num in values:
         real_values.append(num.real)
@@ -24,6 +75,16 @@ def steady_state_eig(_matrix):
     steady_state_raw = vectors[:, _index]
     steady_state = steady_state_raw / fsum(steady_state_raw)
     return steady_state, largest_eig_values
+
+
+def qr_func(_matrix):
+    Q, R = qr(_matrix.T)
+    ss = Q[:, Q.cols-1]
+    return ss/fsum(ss), (R[R.rows-1, R.cols-1], R[R.rows-2, R.cols-2])
+
+
+def cond(_matrix):
+    return mnorm(_matrix, 1)
 
 
 def characterize_solution(ss, _matrix):
@@ -66,16 +127,17 @@ def smallest_largest_elements(_matrix):
 
 
 class MatrixSpecs(object):
-    def __init__(self, _largest, _smallest):
+    def __init__(self, _largest, _smallest, _condition_number):
         self.largest_element = _largest
         self.smallest_element = _smallest
         self.element_different = _largest - _smallest
+        self.condition_number = _condition_number
 
 
 class FittingMetrics(object):
     def __init__(self, _smallest, _sae, _sse, transport_rates):
-        self.smallest_eig = _smallest[0]
-        self.second_smallest_eig = _smallest[1]
+        self.smallest_eig = _smallest[1]
+        self.second_smallest_eig = _smallest[0]
         self.sae_residues = _sae
         self.sse_residues = _sse
         self.transport_errors = self.set_transport_errors(transport_rates)

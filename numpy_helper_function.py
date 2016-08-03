@@ -1,32 +1,65 @@
-# from mpmath import mp, eig, fsum, fabs, matrix, inverse, norm, nprint, fp
 import numpy as np
-import eyring_rate_script as test
+
+import eyring_rate_script as eyring_script
+
 
 __author__ = 'Kyle Vitautas Lopin'
 
 
-def solve_for_steady_state(_ss, _trans_matrix, _num_barriers=None):
-    # 1: compute the sum of absolute errors (sae) and sum of squared errors of the residues left by multiplying the
-    # transition matrix by the steady state solution (which should be all zeros if it is the true steady state)
-    sae, sse = characterize_solution(_ss, _trans_matrix)
+def solve_eyring_rate_model(voltage, transition_matrix):
+    # get the largest and smallest elements from the matrix to characterize the difficulty of solving null
+    # space of the matrix and save it to be retrieved later
+    largest_matrix_element, smallest_matrix_element = smallest_largest_elements(transition_matrix)
+    condition_number = cond(transition_matrix)
+    matrix_specs = MatrixSpecs(largest_matrix_element,
+                               smallest_matrix_element,
+                               condition_number)
 
-    # 2: calculate the ion transport from the ss calculated by the lowest eigenvalue
-    ion_transport = test.eyring_rate_transport(_ss)
+    # 2a eig: get the steady state (ss) solution by using the eigenvector of the lowest eigenvalue
+    ss_by_eig, test_eigs_by_eig = steady_state_eig(transition_matrix)
 
-    # 3: calculate the current from the ions being transported for the eig and svd methods
-    current = test.current_calc(ion_transport, _num_barriers)
+    # save all the results in a custom data class and return it
+    results_eig = solve_eyring_rate_model_ss(voltage, ss_by_eig,
+                                             transition_matrix, test_eigs_by_eig,
+                                             matrix_specs)
 
-    # 4: convert the ss to ints to save in the results section
-    # TODO: this is broken?
-    # int_ss = convert_to_int(_ss)
-    # print 'check: ', int_ss
-    # print 'why?: ', _ss
-    # int_ss = 0
+    ss_by_svd, test_eig_by_svd = svd_func(transition_matrix)
 
-    # 5: Save the fitting results in custom class
-    # fitting_specs = FittingMetrics(test_eig, sae, sse, ion_transport)
+    if any(ss_by_svd):  # incase the svd fails because of singularity
+        results_svd = solve_eyring_rate_model_ss(voltage, ss_by_svd,
+                                                 transition_matrix, test_eig_by_svd,
+                                                 matrix_specs)
+    else:
+        results_svd = results_eig  # hack to make the program work
 
-    return sse, sae, ion_transport, current, _ss
+    ss_by_qr, test_eig_by_qr = qr_func(transition_matrix)
+
+    results_qr = solve_eyring_rate_model_ss(voltage, ss_by_qr,
+                                            transition_matrix, test_eig_by_qr,
+                                            matrix_specs)
+
+    return results_eig, results_svd, results_qr
+
+
+def solve_eyring_rate_model_ss(voltage, _ss, _matrix, _test, _specs):
+    # 3 calculate the ion transport rates
+    _solute_transport = eyring_script.eyring_rate_transport(_ss)
+    # transports are in 1x1 matrix form, so convert them to just scalars
+    solute_transport = dict()
+    for solute in _solute_transport:
+        solute_transport[solute] = [np.asscalar(x) for x in _solute_transport[solute]]
+
+    # characterize how well the steady state is by getting the residues of the steady state times the transition matrix
+    sum_squared_errors, sum_absolute_errors = characterize_solution(_ss, _matrix)
+
+    # 4 calculate the current from the solute transport rates
+    current = eyring_script.current_calc(solute_transport)
+
+    # save the fitting results in a custom class
+    fitting_specs_eig = FittingMetrics(_test, sum_absolute_errors, sum_squared_errors, solute_transport)
+
+    return Results(voltage, _specs, solute_transport, fitting_specs_eig,
+                   current, _ss)
 
 
 def svd_func(_matrix):
@@ -37,7 +70,7 @@ def svd_func(_matrix):
         ss = ss_raw / np.sum(ss_raw)
     except Exception as e:
         print "SVD error", e
-        return None, 0
+        return [False], 0
     return ss.T, smallest_eig_values
 
 
@@ -51,12 +84,21 @@ def steady_state_eig(_matrix):
     values, vectors = np.linalg.eig(_matrix)
     real_values = []
     for num in values:
-        real_values.append(num.real)
+        real_values.append(num.real)  # numerical errors cause the values to become complex for large matrices
     largest_eig_values = two_largest(real_values)  # want the largest numbers because they should all be negative
     _index = real_values.index(max(real_values))
     steady_state_raw = vectors[:, _index].real
     steady_state = steady_state_raw / np.sum(steady_state_raw)
     return steady_state, largest_eig_values
+
+
+def qr_func(_matrix):
+    q, r = np.linalg.qr(_matrix.T)
+    return q[:, -1]/np.sum(q[:, -1]), (r[-1, -1], r[-2, -2])
+
+
+def cond(_matrix):
+    return np.linalg.cond(_matrix)
 
 
 def characterize_solution(ss, _matrix):
@@ -80,28 +122,15 @@ def two_largest(num_list):
 
 
 def smallest_largest_elements(_matrix):
-    l = len(_matrix) - 1
-    smallest_element = np.amin(_matrix)
-    largest_element = np.amax(_matrix)
-    for i in range(l):
-        for j in range(l):
-            num = _matrix[i, j]
-            if num != 0:
-                abs_num = np.fabs(num)
-                if abs_num < smallest_element:
-                    smallest_element = abs_num
-                if abs_num > largest_element:
-                    largest_element = abs_num
+    """
+    get the smallest and largest non-zero elements of a matrix
+    :param _matrix:
+    :return:
+    """
+    abs_matrix = np.fabs(_matrix)
+    smallest_element = np.amin(abs_matrix[np.nonzero(abs_matrix)])
+    largest_element = np.amax(abs_matrix[np.nonzero(abs_matrix)])
     return largest_element, smallest_element
-
-
-def convert_to_int(_vector):
-    int_vector = []
-    print 'hum: ', _vector
-    for num in _vector:
-        int_vector.append(num)
-    print 'hum2 ', int_vector
-    return int_vector
 
 
 class MatrixSpecs(object):
@@ -114,8 +143,8 @@ class MatrixSpecs(object):
 
 class FittingMetrics(object):
     def __init__(self, _smallest, _sae, _sse, transport_rates):
-        self.smallest_eig = _smallest[0]
-        self.second_smallest_eig = _smallest[1]
+        self.smallest_eig = _smallest[1]
+        self.second_smallest_eig = _smallest[0]
         self.sae_residues = _sae
         self.sse_residues = _sse
         self.transport_errors = self.set_transport_errors(transport_rates)

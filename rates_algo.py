@@ -54,7 +54,7 @@ class EryingRateMaker(object):
         # check if mpmath is being used
         if math_package == 'mpmath':
             _start = "mp.mpf("
-            _end = ")"
+            _end = "))"
         elif math_package == 'numpy':
             _start = ""
             _end = ")"

@@ -14,12 +14,12 @@ class SimulationWindow(tk.Frame):
     """
     Make a frame that allows the user to input a voltage range and ion concentrations
     Use get_run_simulation_settings() to get the values the user entered
-    get_settings is used to redisplay previous values into a new display by putting the values into _settings
+    get_settings() is used to redisplay previous values into a new display by putting the values into _settings
     """
     def __init__(self, _master, solutes, _settings=None, *args):
         """
-        make new frame by checking if user entered previous values and calling the 2 subroutines
-        .make_voltage_selection() and make_solute_concentration()
+        make new frame by checking if user entered previous values and calling the 2 subroutines:
+        make_voltage_selection() and make_solute_concentration()
         :param _master: tkinter frame this frame is embedded in
         :param solutes: list of solutes to make widgets for to allow user to enter
         intra and extracellular concentrations for
@@ -28,17 +28,19 @@ class SimulationWindow(tk.Frame):
         :return:
         """
         tk.Frame.__init__(self, master=_master, bd=5, relief='raised')
-        if _settings:
-            self.voltage_setting = _settings[0]
-            self.solute_conc_vars_settings = _settings[1]
+        self.voltage_setting = [-150, 100, 10]  # loading from settings not implemented yet
+        if _settings:  # if settings were inputted load those, else make a blank dict to put them in
+            self.solute_conc_vars_settings = _settings  # to set the tk variables for the user selected concentrations
         else:
-            self.voltage_setting = [-150, 100, 10]
             self.solute_conc_vars_settings = dict()
-        self.solute_conc_vars = dict()
+        self.solute_conc_vars = dict()  # to save tk variables in, values are lists
+
+        # make a section for the user to select the voltage range
         voltage_parameter_frame = tk.Frame(self)
         self.voltage_range = self.make_voltage_selection(voltage_parameter_frame)
         voltage_parameter_frame.pack(side='left')
 
+        # make a section for the user to set the solute concentrations
         self.make_solute_concentration(voltage_parameter_frame, solutes)
 
     def get_settings(self):
@@ -49,11 +51,12 @@ class SimulationWindow(tk.Frame):
         (ex. {'Nai': [1.0, 'mM'], 'Nae': [120.0, 'mM']
 
         """
-        voltages = []
-        for voltage in self.voltage_range:
-            voltages.append(voltage.get())
+        # voltages = []
+        # for voltage in self.voltage_range:
+        #     voltages.append(voltage.get())
+        voltages  = [x.get() for x in self.voltage_range]  # get voltages
         ion_concs = dict()
-        for key in self.solute_conc_vars:
+        for key in self.solute_conc_vars:  # get ion concentrations
             ion_concs[key] = []
             ion_concs[key].append(self.solute_conc_vars[key][0].get())
             ion_concs[key].append(self.solute_conc_vars[key][1].get())

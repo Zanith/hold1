@@ -1,7 +1,7 @@
 import Tkinter as tk
-import gui_simulation_frame as sim_frame
+
 import pyplot_to_tkinter as pytink
-import template_maker as tm
+
 
 __author__ = 'Kyle Vitautas Lopin'
 
@@ -11,10 +11,24 @@ voltages = range(-150, 110, 10)
 class ParameterSelectionFrame(tk.Frame):
     """
     Class to make and display a energy barrier and binding site profile
-    Public attributes:
-    ::self.energy_barriers: dictionary with the keys of "energy
+    Public attribute:
+    ::self.energy_barriers: dictionary with keys of the solutes and values of the energy barriers for those
+    solutes, also includes a key 'distance' with the electrical distances
     """
     def __init__(self, _master, solutes, _charges, num_binding_sites, Q_value, R_value, _settings=None):
+        """
+        Make a user interface where a user can select the energy barrier parameters to fit any Eyring rate model with
+        :param _master: the tkinter app this frame will be put in
+        :param solutes: list of solutes to use, in the order they are to be used
+        :param _charges: list of charges the solutes have
+        :param num_binding_sites:  number of binding sites in the mode
+        :param Q_value:  The Q value to be used, put it in list, i.e. Q=5 Q should be [5], use None if no Q value
+        :param R_value: The R values to use, put in a list.  use None if no R value is to be used
+        :param _settings:  dictionary of the energy settings with a key of 'distance' and the value is a list of the
+        fraction of electrical distance each barrier / site is at, plus each solute as a key and the value is a list of
+        energy barriers.  e.g.  {'distance': [0.25, 0.5, 0.75], 'solute_1': [8.0, -10.0, 8.0]}
+        :return:
+        """
         tk.Frame.__init__(self, master=_master, bd=5, relief='raised')
         self.done_initialize = False
         charges = []
@@ -63,9 +77,9 @@ class ParameterSelectionFrame(tk.Frame):
             distances_float = []
             for distance in self.distances:
                 distances_float.append(distance.get())
-                if len(distances_float) > 1:  # check if distances are in order
-                    if distances_float[-1] < distances_float[-2]:
-                        self.distances[-2].set(distances_float[-1])
+                # if len(distances_float) > 1:  # check if distances are in order
+                #     if distances_float[-1] < distances_float[-2]:
+                #         self.distances[-2].set(distances_float[-1])
             self.energy_barriers['distance'] = distances_float
             # convert the energy barriers into a list of floats
             for solute in self.energies_var:
@@ -78,44 +92,14 @@ class ParameterSelectionFrame(tk.Frame):
 
             # check that the inputted values make sense
 
-            # self.run_button.config(state="active")
             self.parameter_plot.draw_barriers(self.energy_barriers, solutes_list)
-
-    def run_simulation_settings(self, num_sites, solutes, charges, Q, R):
-        print 'run simulation'
-        print 'num binding sites: ', num_sites
-        print 'solutes: ', solutes
-        print "charges: ", charges
-        print "making script"
-        if Q and R:
-            QR_str = "single QR"
-        elif Q:
-            QR_str = "single Q"
-        else:
-            QR_str = "single R"
-        eyring_rate_script = tm.make_template('numpy', num_sites, solutes, charges, QR_str)
-        with open("gui_eyring_rate_script.py", "w") as _file:
-            _file.write(eyring_rate_script)
-        _file.close()
-
-        # import the eyring rate model file that was just made
-
-        #
-        #
-        # results_eig, results_svd = script.eyring_rate_algo(voltages,
-        #                                                    ion_conc,
-        #                                                    energy_barriers,
-        #                                                    num_binding_sites, Qs, Rs)
-        return self.num_binding_sites
 
     def parameter_changed(self, *args):
         """
-        disable the run button if the user has changed a parameter so that the user has to
-        update the energy profile before running the simulation
+        update the energy profile graph if a value has been changed
         :param args: needed so that the method can be bound to an event trace
         :return:
         """
-        # check to make sure the full app has been made first, not sure why this is needed
         self.update_energies(self.solutes)
 
     def pyplot_embed(self, _master):
@@ -146,7 +130,7 @@ class ParameterSelectionFrame(tk.Frame):
         tk.Label(master=_frame, text="electrical distances of barriers:").pack(side='top', anchor='w')
         distance_padding = 2*num_sites + 2
         barrier_frame = tk.Frame(master=_frame)
-        for barrier_index in range(num_barriers):
+        for barrier_index in range(num_barriers):  # this part should be refactored
             tk.Label(master=barrier_frame, text='d'+str(2*barrier_index+1)).pack(side='left',
                                                                                  fill=tk.X, expand=True)
             distance_instance = tk.DoubleVar()
@@ -157,7 +141,7 @@ class ParameterSelectionFrame(tk.Frame):
                 distance_instance.set((2.*barrier_index+1)/distance_padding)
             # if the user writes a number into the spinbox, disable run button till user updates the profile
             distance_instance.trace("w", self.parameter_changed)
-            spin_box_instance = tk.Spinbox(barrier_frame, from_=0, to=1, increment=0.01,
+            spin_box_instance = tk.Spinbox(barrier_frame, from_=0, to=1, increment=0.001,
                                            width=6, textvariable=distance_instance)
 
             spin_box_instance.pack(side='left')
@@ -181,7 +165,7 @@ class ParameterSelectionFrame(tk.Frame):
                 distance_instance.set((2.*site_index+2)/distance_padding)
             # if the user writes a number into the spinbox, disable run button till user updates the profile
             distance_instance.trace("w", self.parameter_changed)
-            spin_box_instance = tk.Spinbox(site_distance_frame, from_=0, to=1, increment=0.01,
+            spin_box_instance = tk.Spinbox(site_distance_frame, from_=0, to=1, increment=0.001,
                                            width=6, textvariable=distance_instance)
 
             spin_box_instance.pack(side='left')
@@ -206,7 +190,7 @@ class ParameterSelectionFrame(tk.Frame):
                 else:
                     self.energies_var[solute][-1].set(8)
 
-                spin_box_instance = tk.Spinbox(barrier_frame, from_=-20, to=20, increment=0.1,
+                spin_box_instance = tk.Spinbox(barrier_frame, from_=-20, to=20, increment=0.01,
                                                width=6, textvariable=self.energies_var[solute][-1])
 
                 spin_box_instance.pack(side='left')
@@ -226,7 +210,7 @@ class ParameterSelectionFrame(tk.Frame):
                 else:
                     self.energies_var[solute][2*site_index+1].set(-10)
 
-                spin_box_instance = tk.Spinbox(site_frame, from_=-20, to=5, increment=0.1,
+                spin_box_instance = tk.Spinbox(site_frame, from_=-20, to=5, increment=0.01,
                                                width=6, textvariable=self.energies_var[solute][2*site_index+1])
 
                 spin_box_instance.pack(side='left')

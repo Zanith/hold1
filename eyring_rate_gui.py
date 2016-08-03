@@ -2,11 +2,13 @@ __author__ = 'Kyle Vitautas Lopin'
 
 import Tkinter as tk
 import tkFileDialog
+
 import gui_parameter_frame as param_frame
 import gui_simulation_frame as sim_frame
 import template_maker as script_maker
 import eyring_rate_script
 import result_toplevel
+
 
 max_charge = 5
 FILEOPTIONS = {'defaultextension': '*.ert_model'}
@@ -51,7 +53,7 @@ class EyringGUI(tk.Tk):
                                        command=lambda: self.process_parameters(self.initial_frame))
         make_params_button.pack(side='bottom')
 
-    def process_parameters(self, initial_settings):
+    def process_parameters(self, initial_settings, _saved_settings=None):
         """
         Process information to properly set the initial settings
         """
@@ -81,16 +83,32 @@ class EyringGUI(tk.Tk):
         _file.close()
         reload(eyring_rate_script)
 
-        self.set_parameters(solutes,
-                            initial_settings.charges,
-                            initial_settings.num_binding_sites.get())
+        self.set_parameters(solutes, initial_settings.charges,
+                            initial_settings.num_binding_sites.get(), _saved_settings)
 
-    def set_parameters(self, solute_text, charges, num_binding_sites):
+    def set_parameters(self, solute_text, charges, num_binding_sites, _saved_settings=None):
+        """
+        set all the parameters for the parameters frame and the simulation frame
+        :param solute_text:  list of solutes the model is made with
+        :param charges: list of the charges each solute has
+        :param num_binding_sites: number of binding sites the model has
+        :param _saved_settings:  dict of settings to pass to the simulation and params frame, used by the load function
+        should have a 'param' key with setting for param frame,
+        e.g.{'distance': [0.25, 0.5, 0.75], 'Na': [8.0, -10.0, 8.0], 'Mg': [8.0, -10.0, 8.0]}
+        and a 'sim' key with setting for the simulation frame, e.g.
+        {'sim': {'Mge': ['0.0', 'mM'], 'Nae': ['145.0', 'mM'], 'Mgi': ['1.0', 'mM'], 'Nai': ['145.0', 'mM']}
+        """
+        print 'settings in set: ', _saved_settings
+        # check if the user has inputted any saved parameters, or if there is are already parameters in the frame
         saved_params = None
-        if self.parameter_frame:
+        if _saved_settings:
+            saved_params = _saved_settings['param']  # load the users parameters
+        elif self.parameter_frame:
             # take the old parameters of the frame and pass them to the new frame to make it with
             saved_params = self.parameter_frame.energy_barriers
+        if self.parameter_frame:  # if the there is already a parameter frame, destroy it so it can be replaced
             self.parameter_frame.destroy()
+        # have a frame to hold the position of the parameter frome so it doesn't move
         self.hold_parameter_frame.pack(side='left')
 
         # make a frame for the user to make the energy profiles to use
@@ -103,12 +121,21 @@ class EyringGUI(tk.Tk):
 
         # make a frame for the user to select the voltages to use and the ion concentrations to use
         _saved_sim_params = None
-        if self.simulation_frame:
+        # check if the user has inputted any saved parameters, or if there is are already parameters in the frame
+        if _saved_settings:
+            _saved_sim_params = _saved_settings['sim']
+        elif self.simulation_frame:
+            # take the old parameters of the frame and pass them to the new frame to make it with
             _saved_sim_params = self.simulation_frame.get_settings()
+        if self.simulation_frame:  # if the there is already a simulation frame, destroy it so it can be replaced
             self.simulation_frame.destroy()
 
+        # make the frame
         self.simulation_frame = sim_frame.SimulationWindow(self.top_frame, solute_text, _saved_sim_params)
         self.simulation_frame.pack(side='left')
+
+        # add the run button the first time, afterwards change the config, not sure why this is needed but
+        # num_binding_sites will not be correct if the else statement is not included
         if not self.run_button:
             self.run_button = tk.Button(self.run_button_frame, text="Run Simulation full",
                                         command=lambda: self.run_simulation(num_binding_sites))
@@ -116,6 +143,7 @@ class EyringGUI(tk.Tk):
         else:
             self.run_button.config(command=lambda: self.run_simulation(num_binding_sites))  # hackish
 
+        # change the size of the application depending on how many binding sites and solutes there are
         num_solutes = len(solute_text)
         _heigth = int(69 * num_solutes + 450)
         _width = int(88 * num_binding_sites + 980)
@@ -178,14 +206,65 @@ class EyringGUI(tk.Tk):
         self.config(menu=menubar)
 
     def open_file(self):
-        print 'open file, not implemented yet'
         filename = tkFileDialog.askopenfilename()
+        if not filename:  # user cancelled so just return
+            return
         with open(filename, 'r') as model_file:
             model = model_file.read()
-            num_sites_1 = model.index("num sites: ")
-            print 'check 1', num_sites_1
             num_sites = self.find_between(model, 'num sites: ', '\n')
-            print 'check 2', model.split('num sites: ', 1)[1][1]
+            self.initial_frame.num_binding_sites.set(num_sites)
+            print 'num sites: ', num_sites
+            solutes = self.find_between(model, '\nsolutes: ', ' \n').split(' ')
+            num_solutes = len(solutes)
+            print 'num solutes: ', num_solutes, solutes
+            # self.initial_frame.solutes = solutes
+            self.initial_frame.remove_all_solute_entries()
+            self.initial_frame.num_solutes_entries = num_solutes
+            self.initial_frame.num_solutes.set(num_solutes)
+            self.initial_frame.solute_num_event(num_solutes)
+
+
+            charges_str = self.find_between(model, '\ncharges: ', ' \n').split(' ')
+            charges = [int(x) for x in charges_str]
+            for i, solute in enumerate(solutes):
+                self.initial_frame.add_solute_entry(solute, charges[i])
+            print 'charges: ', charges
+            if 'no Q factor' in model:
+                self.initial_frame.Q_value_used = False
+                self.initial_frame.Q_on_off.set(0)
+                self.initial_frame.Q_check_call()
+            else:
+                self.initial_frame.Q_value_used = True
+                self.initial_frame.Q_on_off.set(1)
+                self.initial_frame.Q_check_call()
+                self.initial_frame.Q_value = float(self.find_between(model, 'Q factor: ', '\n'))
+        if 'energy barriers:' in model:
+            # the model has a parameter and simulation frame settings
+            _parameter_settings_str = self.find_between(model, '\nenergy barriers: ', '\nvoltages:')
+            print 'param setting str ', _parameter_settings_str
+            _energy_barriers = dict()
+            for _setting_str in _parameter_settings_str.split('\n'):
+                _key, _values = _setting_str.split(':')
+                _energy_barriers[_key] = [float(x) for x in _values.split(', ')]
+            print 'energy build: ', _energy_barriers
+
+
+
+            _simulation_settings_str = model.split('solute concentrations:\n')[1]
+            print 'sim settings: ', _simulation_settings_str
+            _sim_settings = dict()
+            for _conc in _simulation_settings_str.split('\n'):
+                if _conc:
+                    print 'conc: ', _conc
+                    _key, _value = _conc.split(': ')
+                    _sim_settings[_key] = [_value[:-2], _value[-2:]]
+            print 'sim settings: done', _sim_settings
+            _settings = dict()
+            _settings['param'] = _energy_barriers
+            _settings['sim'] = _sim_settings
+            self.process_parameters(self.initial_frame, _settings)
+
+        # self.initial_frame.update()
 
     def find_between(self, target, _start, _end):
         """
@@ -205,14 +284,15 @@ class EyringGUI(tk.Tk):
             _Qstr = 'no Q factor'
 
         filename = tkFileDialog.asksaveasfilename(**FILEOPTIONS)
-
+        if not filename:
+            return
         with open(filename, 'w') as model_file:
             model_file.write('num sites: %d\n' % self.initial_frame.num_binding_sites.get())
             model_file.write('num solutes: %d\n' % self.initial_frame.num_solutes_entries)
             model_file.write('solutes: ')
             for solute in solutes:
                 model_file.write('%s ' % solute)
-            model_file.write('\nchargea: ')
+            model_file.write('\ncharges: ')
             for charge in charges:
                 model_file.write('%d ' % charge)
             model_file.write('\n%s\n' % _Qstr)
@@ -262,11 +342,11 @@ class InitialFrame(tk.Frame):
         # make a place wher ethe user can choose the number of solutes to include in the model and bind the
         # number to solute_num_event to be called when the user clicks on the spinbox
         self.num_solutes_entries = 1
-        num_solutes = tk.IntVar()
+        self.num_solutes = tk.IntVar()
         tk.Label(master=self, text="Numebr of solutes").pack(side='top', pady=5)
         solute_spinbox = tk.Spinbox(self, from_=1, to=6,
-                                    textvariable=num_solutes,
-                                    command=lambda: self.solute_num_event(num_solutes.get()),
+                                    textvariable=self.num_solutes,
+                                    command=lambda: self.solute_num_event(self.num_solutes.get()),
                                     width=5)
         solute_spinbox.pack(side='top', pady=1)
 
@@ -300,6 +380,7 @@ class InitialFrame(tk.Frame):
         Q_checkbox = tk.Checkbutton(QR_frame, text="Use Q factor?",
                                     variable=self.Q_on_off,
                                     command=self.Q_check_call)
+
         Q_checkbox.pack(side='top')
         self.Q_value.set(5.0)
         self.Q_entry = tk.Entry(QR_frame, state='disabled', width=10,
@@ -355,25 +436,34 @@ class InitialFrame(tk.Frame):
         self._solute_entry_boxes.append(tk.Entry(self._solute_frame, textvariable=self.solutes[0]))
         self._solute_entry_boxes[0].pack(side='top')
 
-    def add_solute_entry(self):
+    def add_solute_entry(self, _solute=None, _charge=None):
         """
         add a new entry box for the user to type in the name of a new solute and charge spinbox
         :return:
         """
         # make new solute box
         self.solutes.append(tk.StringVar())
-        self.solutes[-1].set("solute "+str(self.num_solutes_entries+1))
+        if not _solute:
+            self.solutes[-1].set("solute "+str(self.num_solutes_entries+1))
+        else:
+            self.solutes[-1].set(_solute)
         self._solute_entry_boxes.append(tk.Entry(self._solute_frame, textvariable=self.solutes[-1]))
         self._solute_entry_boxes[-1].pack(side='top')
 
         # add new charges spin box
         self.charges.append(tk.IntVar())
+        if _charge:
+            self.charges[-1].set(_charge)
         self._charge_spinboxes.append(tk.Spinbox(self._charges_frame, from_=-max_charge, to=max_charge,
                                                  textvariable=self.charges[-1], width=3))
         self._charge_spinboxes[-1].pack(side='top')
         # update number of solute entries and update the frame
         self.num_solutes_entries += 1
         self.update()
+
+    def remove_all_solute_entries(self):
+        while self.solutes:
+            self.remove_solute_entry()
 
     def remove_solute_entry(self):
         """

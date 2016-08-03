@@ -1,8 +1,10 @@
 import Tkinter as tk
 from tkFileDialog import asksaveasfilename
 import csv
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+
 
 __author__ = 'Kyle Vitautas Lopin'
 
@@ -10,38 +12,58 @@ colors = ['k', 'r', 'b', 'g', 'm', 'c']
 
 
 class MultiPlotWindows(tk.Toplevel):
-    def __init__(self, master, voltage, current, solute_transport,
-                 energy_profile, conc_label, solutes, _size=(3, 3)):
+    def __init__(self, master, voltage, energy_profile, results, solutes, conc_label, _title):
         """
         Make a tkinter toplevel that displays the 1) energy profiles, and 2) concentrations used for the simulation with
         3) the current per channel and 4) each solutes transport rates calculated in matplotlib subplots
         :param master:  root tk.Tk the toplevel is made from
         :param voltage: list of voltages to display
-        :param current: list of currents calculated, same length as voltage
-        :param solute_transport:  dict of the ion transport rates with the solutes as keys and the values is the
-        corresponding list of transport values that is calculated with the corresponding voltage in 'voltage'
         :param energy_profile:  dict of energy profiles used in the calculation.  The keys are the solutes used plus a
         'distance'  entry, the values are a list of the energy potentials of the barriers and binding sites except for
-         the 'distance' value which is a list of the electrical distances used
+        the 'distance' value which is a list of the electrical distances used
+        :param results: claa Results found in numpy_helper_function
+        :param solutes:  list of the strings of the solutes used
         :param conc_label: dict of concentrations used, the keys are the solutes + a 'e' or 'i' to represent if the
         concentration is the extra or intracellular concentration, the values are strings of the user
         entered concentrations
-        :param solutes:  list of the strings of the solutes used
-        :param _size: tuple of the number of columns and rows subplots to display
         :return:
         """
         tk.Toplevel.__init__(self, master=master)
+        self.title(_title)
         # bind variables to self so they don't have to be passed around as much
         self.voltages = voltage
-        self.transport = solute_transport
-        self.current = current
         self.energy_profile = energy_profile
+        self.results = results
+        self.conc_label = conc_label
         self.conc_label = conc_label
         self.solutes = solutes
-        self._size = _size
+        # make variables to hold measurements
+        # dictionary to hold transport rates, keys are solutes and values are the a list
+        # transport rates over each barrier
+        self.transport = dict()
+        transport_errors = dict()  # keep any differences between different transport rates over different barriers
+        self.current = []  # calculated current
+        ss = []  # steady state solution of states
+        for solute in solutes:
+            self.transport[solute] = []
+            transport_errors[solute] = []
+        for result in results:
+            ss.append(result.steady_state)
+            self.current.append(result.current[1])  # use the transport over the second barrier
+            for solute in solutes:
+                # get the ions transported over the 2nd barrier
+                self.transport[solute].append(result.ion_transport[solute][1])
+                # get errors calculated for the ions transported over the different barriers
+                transport_errors[solute].append(max(result.ion_transport[solute])-min(result.ion_transport[solute]))
+        if len(solutes) < 2:
+            self._size = (2, 2)
+        elif len(solutes) > 3:
+            self._size = (3, 3)
+        else:
+            self._size = (2, 3)
 
         # set the geometry based on how many plots are to be made
-        geometry_size = "%dx%d" % (_size[1]*300, _size[0]*300)
+        geometry_size = "%dx%d" % (self._size[1]*300, self._size[0]*300)
         self.geometry(geometry_size)
         # make matplotlib figure and get the tkinter canvas backend for the figure
         self.fig = plt.figure()
@@ -50,19 +72,19 @@ class MultiPlotWindows(tk.Toplevel):
         canvas._tkcanvas.config(highlightthickness=0)  # get rid of outline
 
         # make plot of energy profiles
-        energy_profile_plot = self.fig.add_subplot(_size[0], _size[1], 1)
+        energy_profile_plot = self.fig.add_subplot(self._size[0], self._size[1], 1)
         energy_plot(energy_profile_plot, energy_profile)
 
         # make graph to show the concentration on either side of the membrane
         self.display_concentrations(conc_label)
 
         # make current graph
-        self.plot_routine(current, "current (pA)", "Total Current per Channel", 3)
+        self.plot_routine(self.current, "current (pA)", "Total Current per Channel", 3, sci_format=True)
 
         # make transport plots for each solute transported
         _index = 4
-        for solute in solute_transport:
-            self.plot_routine(solute_transport[solute], "ions trasnported per second",
+        for solute in solutes:
+            self.plot_routine(self.transport[solute], "ions trasnported per second",
                               solute+" transport", _index, sci_format=True)
             _index += 1
 
@@ -76,6 +98,12 @@ class MultiPlotWindows(tk.Toplevel):
 
         # make button to save data
         tk.Button(self, text='Save data', command=self.save_data).pack(side='bottom')
+
+        # make button to make a custom save data function
+        tk.Button(self, text='Save custom_data', command=self.save_custom_data).pack(side='bottom')
+
+        # make button to make a custom save data function
+        tk.Button(self, text='Save custom_data2', command=self.save_custom_data2).pack(side='bottom')
 
     def display_concentrations(self, conc_label):
         """
@@ -138,7 +166,117 @@ class MultiPlotWindows(tk.Toplevel):
                 _row = [voltage, self.current[i]]
                 for solute in self.solutes:
                     _row.append(self.transport[solute][i])
+                writer.writerow(_row)  #write the row
+        # file automatically closes with with statement
+
+    def save_custom_data(self):
+        """
+        Make a list to test how well the programming is calculating the currents and tranport rate
+        columns are: voltage:largest element:smallest_element:element difference:element ratio:
+        condition number:transport difference solute 1:transport difference solute 2: ... :
+        difference in current :
+        smallest eig : second smallest eig : absolute errors in ss : sum squared errors in ss
+        """
+        voltages = self.voltages
+        # make predictor variables
+        largest_element = []
+        smallest_element = []
+        element_difference = []
+        ratio_of_elements = []
+        condition_number = []
+
+        # make variables of how well the calculation was performed
+        smallest_eig = []
+        second_smallest_eig = []
+        sae = []
+        sse = []
+
+        transport_errors = dict()
+        current_errors = []
+
+        for solute in self.solutes:
+
+            # self.transport[solute] = []
+            transport_errors[solute] = []
+
+        for result in self.results:
+            largest_element.append(result.matrix_spec.largest_element)
+            smallest_element.append(result.matrix_spec.smallest_element)
+            element_difference.append(largest_element[-1]-smallest_element[-1])
+            ratio_of_elements.append(largest_element[-1]/smallest_element[-1])
+            condition_number.append(result.matrix_spec.condition_number)
+
+            smallest_eig.append(result.fitting.smallest_eig)
+            second_smallest_eig.append(result.fitting.second_smallest_eig)
+            sae.append(result.fitting.sae_residues)
+            sse.append(result.fitting.sse_residues)
+
+            current_errors.append(max(result.current)-min(result.current))
+
+            for solute in self.solutes:
+                # get errors calculated for the ions transported over the different barriers
+                print 'voltage: ', result.voltage
+                print 'solute: ', solute
+                print 'transport: ', result.ion_transport[solute]
+                transport_errors[solute].append(max(result.ion_transport[solute])-min(result.ion_transport[solute]))
+
+        # get filename from user and open file
+        filename = asksaveasfilename(defaultextension=".csv")
+        if not filename:
+            return  # exit if save was cancelled
+        with open(filename, 'wb') as csvfile:
+            writer = csv.writer(csvfile, dialect='excel')  # write file as excel dialect
+            # make a header with simulation details as the first line
+            header_row = [str(self.energy_profile), str(self.conc_label)]
+            writer.writerow(header_row)
+            _row = ['voltage', 'largest element', 'smallest element', 'element difference', 'element ratio difference',
+                    'condition number']
+            for solute in self.solutes:
+                _row.append('transport error '+solute)
+            _row.extend(['current errors', 'smallest eigenvalue', 'second smallest eigenvalue',
+                         'sum absolute errors', 'sum squared errors'])
+            writer.writerow(_row)
+
+            for i, voltage in enumerate(voltages):
+                _row = [voltage, largest_element[i], smallest_element[i], element_difference[i], ratio_of_elements[i],
+                        condition_number[i]]
+                for solute in self.solutes:
+                    _row.append(transport_errors[solute][i])
+                _row.extend([current_errors[i], smallest_eig[i], second_smallest_eig[i], sae[i], sse[i]])
                 writer.writerow(_row)
+
+    def save_custom_data2(self):
+        """
+        Class to save the current and solute transport over each barrier
+        """
+        # ask the use what to call the data file
+        filename = asksaveasfilename(defaultextension=".csv")
+        if not filename:
+            return  # exit if save was cancelled
+        with open(filename, 'wb') as csvfile:
+            writer = csv.writer(csvfile, dialect='excel')  # write file as excel dialect
+
+            # make a header with simulation details as the first line
+            header_row = [str(self.energy_profile), str(self.conc_label)]
+            writer.writerow(header_row)
+            # make column headers with details of the columns
+            _row = ['voltage']
+            _i = len(self.results[0].current)
+            for i in range(_i):
+                _row.append('current, barrier %d' % i)
+            for solute in self.solutes:
+                for i in range(_i):
+                    _row.append('%s transport over barrier %d' % (solute, i))
+            writer.writerow(_row)
+
+            # write the results for each variable and write the row
+            for result in self.results:
+                _row = [result.voltage]
+                _row.extend(result.current)
+                for solute in self.solutes:
+                    _row.extend(result.ion_transport[solute])
+                writer.writerow(_row)
+        # file automatically closes with with statement
 
 
 def energy_plot(plot_axis, profiles):

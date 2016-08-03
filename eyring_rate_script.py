@@ -1,6 +1,7 @@
+from numpy import exp, matrix
+
 import numpy_helper_function as helper
-from numpy import exp, matrix, asscalar, any
-from numpy.linalg import cond
+
 
 states = [[0],
           ['solute_1']]
@@ -9,105 +10,95 @@ ions = ['solute_1']
 ion_charges = {'solute_1': 0}
 q_charge = 1.602e-19
 
-def eyring_rate_algo(voltages, ion_conc, energy_barriers, num_barriers=None, Qs=[1], Rs=1, mp_dps=0):
+def eyring_rate_algo(voltages, ion_conc, energy_barriers, num_barriers=None, Qs=[1], Rs=1, mp_dps=15):
     
-    print "ion_conc:", ion_conc
     results_eig = []
     results_svd = []
+    results_qr = []
     if not num_barriers:
         num_barriers = (len(energy_barriers) + 1) / 2
     for voltage in voltages:
+        print 'voltage: ', voltage
+
         # 1: make the transition matrix
         trans_matrix = eyring_rate_matrix(voltage, ion_conc, energy_barriers, Qs, Rs)
 
         # 2: get the largest and smallest elements from the matrix to characterize the difficulty of solving null
         # space of the matrix and save it to be retrieved later
-        largest_matrix_element, smallest_matrix_element = helper.smallest_largest_elements(trans_matrix)
-        condition_number = cond(trans_matrix)
-        matrix_specs = helper.MatrixSpecs(largest_matrix_element,
-                                          smallest_matrix_element,
-                                          condition_number)
+        # largest_matrix_element, smallest_matrix_element = helper.smallest_largest_elements(trans_matrix)
+        # condition_number = helper.cond(trans_matrix)
+        # matrix_specs = helper.MatrixSpecs(largest_matrix_element,
+        #                                   smallest_matrix_element,
+         #                                  condition_number)
 
         # 3a eig: get the steady state (ss) solution by using the eigenvector of the lowest eigenvalue
-        ss_by_eig, test_eigs_by_eig = helper.steady_state_eig(trans_matrix)
+         #ss_by_eig, test_eigs_by_eig = helper.steady_state_eig(trans_matrix)
 
-        # for the steady state calculated by the eigenvalue method calculate the ion transport, current and fitting
-        # specs of the steady state
-        eig_results = helper.solve_for_steady_state(ss_by_eig,
-                                                    trans_matrix,
-                                                    num_barriers)
-        # unpack the results
-        sse_eig = eig_results[0]
-        sae_eig = eig_results[1]
-        ion_transport_eig = eig_results[2]
-        current_eig = eig_results[3]
-        int_ss_by_eig = eig_results[4]
-
-        # 4a eig: compute the sum of absolute errors (sae) and sum of squared errors of the residues left by multiplying the
-        # transition matrix by the steady state solution (which should be all zeros if it is the true steady state)
-        # sae_eig, sse_eig = helper.characterize_solution(ss_by_eig, trans_matrix)
-
-        # 5a eig: calculate the ion transport from the ss calculated by the lowest eigenvalue
+        # 4a calculate the ion transport rates
         # ion_transport_eig = eyring_rate_transport(ss_by_eig)
 
-        # 6a eig: calculate the current from the ions being transported for the eig and svd methods
-        # current_eig = current_calc(ion_transport_eig, num_barriers)
+        # 5a for the steady state calculated by the eigenvalue method calculate the current and fitting
+        # specs of the steady state
+        # eig_results = helper.solve_for_steady_state(ss_by_eig,
+        #                                             trans_matrix,
+        #                                             num_barriers)
+        # unpack the results
+        # sse_eig = eig_results[0]
+        # sae_eig = eig_results[1]
+        # current_eig = eig_results[2]
 
-        # 7a eig: convert the ss to ints to save in the results section
-        # int_ss_by_eig = convert_mp_int(ss_by_eig)
+        # 6a eig: Save the fitting results in custom class
+        # fitting_specs_eig = helper.FittingMetrics(test_eigs_by_eig,
+        #                                           sae_eig,
+        #                                           sse_eig,
+        #                                           ion_transport_eig)
 
-        # 8a eig: Save the fitting results in custom class
-        fitting_specs_eig = helper.FittingMetrics(test_eigs_by_eig,
-                                                  sae_eig,
-                                                  sse_eig,
-                                                  ion_transport_eig)
-
-        # 9a eig: save all results in custom data class
-        results_eig.append(helper.Results(voltage, matrix_specs,
-                                          ion_transport_eig, fitting_specs_eig,
-                                          current_eig, int_ss_by_eig))
+        # 7a eig: save all results in custom data class
+        # results_eig.append(helper.Results(voltage, matrix_specs,
+        #                                   ion_transport_eig, fitting_specs_eig,
+        #                                   current_eig, ss_by_eig))
 
         # 3b svd: try to get the ss using svd decomposition and getting the null space
         # NOTE: this method may not converge
-        ss_by_svd, test_eig_by_svd = helper.svd_func(trans_matrix)
+        # ss_by_svd, test_eig_by_svd = helper.svd_func(trans_matrix)
 
-        if any(ss_by_svd):  # test if the svd decomposition converged before using it
-            # for the steady state calculated by the svd method calculate the ion transport, current and fitting
-            # specs of the steady state
-            svd_results = helper.solve_for_steady_state(ss_by_svd, trans_matrix, num_barriers)
-
-            sse_svd = svd_results[0]
-            sae_svd = svd_results[1]
-            ion_transport_svd = svd_results[2]
-            current_svd = svd_results[3]
-            int_ss_by_svd = svd_results[4]
-
-            # 4b svd: compute the sae and sse of residues of the svd ss solution
-            # sae_svd, sse_svd = helper.characterize_solution(ss_by_svd, trans_matrix)
-            
-            # 5b svd: calculate the ion transport from the ss calculated by the svd method
+        # if any(ss_by_svd):  # test if the svd decomposition converged before using it
+            # 4b calculate the ion transport rates
             # ion_transport_svd = eyring_rate_transport(ss_by_svd)
 
-            # 6b svd: calculate the current from the ions being transported for the svd method
-            # current_svd = current_calc(ion_transport_svd, num_barriers)
+            # 5b for the steady state calculated by the svd method calculate the ion transport, current and fitting
+            # specs of the steady state
+            # svd_results = helper.solve_for_steady_state(ss_by_svd, trans_matrix, num_barriers)
 
-            # 7b svd: convert the steady states' to ints to save in the results section
-            # int_ss_by_svd = convert_mp_int(ss_by_svd)
+            # sse_svd = svd_results[0]
+            # sae_svd = svd_results[1]
+            # current_svd = svd_results[2]
 
-            # 8b svd: Save the fitting results in custom class
-            fitting_specs_svd = helper.FittingMetrics(test_eig_by_svd,
-                                                      sae_svd,
-                                                      sse_svd,
-                                                      ion_transport_svd)
-            results_svd.append(helper.Results(voltage, matrix_specs,
-                                              ion_transport_svd, fitting_specs_svd,
-                                              current_svd, int_ss_by_svd))
-        else:
-            print "SVD fail at voltage: ", voltage
-            results_svd.append(helper.Results(voltage, matrix_specs,
-                                              None, None, None, None))
+            # 6b svd: Save the fitting results in custom class
+            # fitting_specs_svd = helper.FittingMetrics(test_eig_by_svd,
+            #                                           sae_svd,
+            #                                           sse_svd,
+            #                                           ion_transport_svd)
+            # 7b: save all results in custom data class
+            # results_svd.append(helper.Results(voltage, matrix_specs,
+            #                                   ion_transport_svd, fitting_specs_svd,
+            #                                   current_svd, ss_by_svd))
+        # else:
+            # print "SVD fail at voltage: ", voltage
+            # results_svd.append(helper.Results(voltage, matrix_specs,
+             #                                  None, None, None, None))
 
-    return results_eig, results_svd
+        # 3c qr: try to get the ss using qr decomposition and getting the null space
+        # NOTE: this method may not converge
+        # ss_by_qr, test_eig_by_qr = helper.qr_func(trans_matrix)
+
+        result_eig, result_svd, result_qr = helper.solve_eyring_rate_model(voltage, trans_matrix)
+
+        results_eig.append(result_eig)
+        results_svd.append(result_svd)
+        results_qr.append(result_qr)
+
+    return results_eig, results_svd, results_qr
 
 
 def convert_mp_int(_vector):
@@ -169,17 +160,20 @@ def eyring_rate_transport(steady_state):
         transport_rate[ion] = []
 
         for i in range(len(inward.values()[0])):
-            transport_rate[ion].append(asscalar(outward[ion][i].real - inward[ion][i].real))
+            transport_rate[ion].append((outward[ion][i].real - inward[ion][i].real))
+
     return transport_rate
 
 
-def current_calc(transport_rates, num_barriers):
+def current_calc(transport_rates):
     """
     Calculate the current for each barrier using the ion transport rates
     :param transport_rates:  dictionary of ions (as keys) with list of rates as values
     :return: dictionary of currents (in picoamps) caused by each ion and the 'total' current
     """
     all_currents = []
+    # get number of barriers by looking at a transport value
+    num_barriers = len(transport_rates[transport_rates.keys()[0]])
     for barrier in range(num_barriers):
         current = 0
         for ion in ions:
