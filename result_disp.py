@@ -1,10 +1,9 @@
 import Tkinter as tk
-from tkFileDialog import asksaveasfilename
 import csv
+from tkFileDialog import asksaveasfilename
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
-
 
 __author__ = 'Kyle Vitautas Lopin'
 
@@ -142,16 +141,16 @@ class MultiPlotWindows(tk.Toplevel):
         if sci_format:
             _plot.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
 
-    def save_data(self):
+    def save_data(self, filename=None):
         """
         Save the data with the columns in the format:
         voltage  current  solute_transport1  solute_transport2
         to a comma separated values file
         :return:
         """
-        # get filename from user and open file
-        filename = asksaveasfilename(defaultextension=".csv")
-        with open(filename, 'wb') as csvfile:
+        if not filename:  # get filename from user and open file
+            filename = asksaveasfilename(defaultextension=".csv")
+        with open(filename, 'ab') as csvfile:
             writer = csv.writer(csvfile, dialect='excel')  # write file as excel dialect
             # make a header with simulation details as the first line
             header_row = [str(self.energy_profile), str(self.conc_label)]
@@ -169,7 +168,7 @@ class MultiPlotWindows(tk.Toplevel):
                 writer.writerow(_row)  #write the row
         # file automatically closes with with statement
 
-    def save_custom_data(self):
+    def save_custom_data(self, filename=None):
         """
         Make a list to test how well the programming is calculating the currents and tranport rate
         columns are: voltage:largest element:smallest_element:element difference:element ratio:
@@ -215,16 +214,13 @@ class MultiPlotWindows(tk.Toplevel):
 
             for solute in self.solutes:
                 # get errors calculated for the ions transported over the different barriers
-                print 'voltage: ', result.voltage
-                print 'solute: ', solute
-                print 'transport: ', result.ion_transport[solute]
                 transport_errors[solute].append(max(result.ion_transport[solute])-min(result.ion_transport[solute]))
 
-        # get filename from user and open file
-        filename = asksaveasfilename(defaultextension=".csv")
+        if not filename:  # get filename from user and open file
+            filename = asksaveasfilename(defaultextension=".csv")
         if not filename:
             return  # exit if save was cancelled
-        with open(filename, 'wb') as csvfile:
+        with open(filename, 'ab') as csvfile:
             writer = csv.writer(csvfile, dialect='excel')  # write file as excel dialect
             # make a header with simulation details as the first line
             header_row = [str(self.energy_profile), str(self.conc_label)]
@@ -245,15 +241,15 @@ class MultiPlotWindows(tk.Toplevel):
                 _row.extend([current_errors[i], smallest_eig[i], second_smallest_eig[i], sae[i], sse[i]])
                 writer.writerow(_row)
 
-    def save_custom_data2(self):
+    def save_custom_data2(self, filename=None):
         """
         Class to save the current and solute transport over each barrier
         """
-        # ask the use what to call the data file
-        filename = asksaveasfilename(defaultextension=".csv")
+        if not filename:  # get filename from user and open file
+            filename = asksaveasfilename(defaultextension=".csv")
         if not filename:
             return  # exit if save was cancelled
-        with open(filename, 'wb') as csvfile:
+        with open(filename, 'ab') as csvfile:
             writer = csv.writer(csvfile, dialect='excel')  # write file as excel dialect
 
             # make a header with simulation details as the first line

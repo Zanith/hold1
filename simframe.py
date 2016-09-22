@@ -3,10 +3,6 @@ import Tkinter as tk
 
 __author__ = 'Kyle Vitautas Lopin'
 
-"""
-Notes: store solute
-"""
-
 conc_options = ['M', 'mM', 'uM', 'nM', 'pM', 'fM']
 
 
@@ -28,13 +24,13 @@ class SimulationWindow(tk.Frame):
         :return:
         """
         tk.Frame.__init__(self, master=_master, bd=5, relief='raised')
-        self.voltage_setting = [-150, 100, 10]  # loading from settings not implemented yet
+        self.voltage_setting = [-150, 100, 10]
         if _settings:  # if settings were inputted load those, else make a blank dict to put them in
+            self.voltage_setting = _settings.pop('voltage', [-150, 100, 10])
             self.solute_conc_vars_settings = _settings  # to set the tk variables for the user selected concentrations
         else:
             self.solute_conc_vars_settings = dict()
         self.solute_conc_vars = dict()  # to save tk variables in, values are lists
-
         # make a section for the user to select the voltage range
         voltage_parameter_frame = tk.Frame(self)
         self.voltage_range = self.make_voltage_selection(voltage_parameter_frame)
@@ -55,12 +51,13 @@ class SimulationWindow(tk.Frame):
         # for voltage in self.voltage_range:
         #     voltages.append(voltage.get())
         voltages  = [x.get() for x in self.voltage_range]  # get voltages
-        ion_concs = dict()
+        settings = dict()
+        settings['voltage'] = voltages
         for key in self.solute_conc_vars:  # get ion concentrations
-            ion_concs[key] = []
-            ion_concs[key].append(self.solute_conc_vars[key][0].get())
-            ion_concs[key].append(self.solute_conc_vars[key][1].get())
-        return voltages, ion_concs
+            settings[key] = []
+            settings[key].append(self.solute_conc_vars[key][0].get())
+            settings[key].append(self.solute_conc_vars[key][1].get())
+        return settings
 
     def get_run_simulation_settings(self):
         """
@@ -160,11 +157,14 @@ class SimulationWindow(tk.Frame):
         intra_var_instance = tk.DoubleVar()
         conc_option_var = tk.StringVar()
         # _type[0] is either 'i' or 'e'
+        # solute+_type[0]: e.g., Nai or Nae
         if solute+_type[0] in self.solute_conc_vars_settings:  # check if the solute has been used before and if
             # so then enter the previous values into the new instances
             previously_entered_values = self.solute_conc_vars_settings[solute+_type[0]]
             previous_conc = previously_entered_values[0]
             previous_order = previously_entered_values[1]
+            if previous_order not in conc_options:  # if the unit is M, then delete
+                previous_order = previous_order[1]
             intra_var_instance.set(previous_conc)
             _option_index = conc_options.index(previous_order)
             conc_option_var.set(conc_options[_option_index])

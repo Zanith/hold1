@@ -1,6 +1,7 @@
-import numpy_helper_function as helper
 from numpy import exp, matrix, asscalar, any
 from numpy.linalg import cond
+
+import np_func as helper
 
 states = [[0],
           ['solute 1']]

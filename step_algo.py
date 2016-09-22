@@ -328,7 +328,7 @@ class EryingRateModelMaker(object):
                                      + str(left_ion.place)
                                      + str(site_index+1)
                                      + power_str)
-            elif 'single QR' == self.q_type and left_ion.place+2 == site_index:
+            elif 'single QR' == self.q_type and int(left_ion.place)+2 == site_index:
                 backward_rate.append('R' + power_str)
         for right_ion in right_ions:
             if right_ion.charge*ion_moving_charge == 1:
@@ -450,12 +450,16 @@ class EryingRateModelMaker(object):
     def get_q_str(self):
         return self.q_str
 
-    def get_q_global_str(self):
-        if self.num_binding_sites < 2:  # if there is only 1 binding site, there are not Qs
+    def get_qr_global_str(self):
+        if self.num_binding_sites < 2:  # if there is only 1 binding site, there are not Qs or Rs
             return ""
-        if 'full Q' in self.q_type:
+        if 'full QR' in self.q_type:  # keep order so if full QR, full Q will not be triggered
+            raise NotImplemented
+        elif 'full Q' in self.q_type:
             _str = "    global "
             _str += ', '.join(self.q_global_list)
+        elif 'single QR' in self.q_type:
+            _str = "    global Q  \n    global R "
         elif 'single Q' in self.q_type:
             _str = "    global Q  "
         return _str
@@ -535,7 +539,7 @@ if __name__ == "__main__":
 
     hold_f = instance.get_forward_transport_rates_str()
     hold_b = instance.get_backward_transport_rates_str()
-    print instance.get_q_global_str()
+    print instance.get_qr_global_str()
     print ""
     print hold_f[:-1]
     print ""

@@ -14,17 +14,15 @@ def make_template(_math_type, num_binding_sites, ions, charges, q_type):
     :param q_type: what type of repulsion / attraction coefficents their are
     :return:
     """
-    print "makeing model with ", num_binding_sites, "binding sites and ", ions, " ions"
     with open('template.txt', 'r') as f:
         template = f.read()  # get the template of the file to make
     if _math_type == 'mpmath':
         _import_statement = "from mpmath import mp, exp, matrix, nstr, chop\n" \
-                            "import mpmath_helper_function as helper"
+                            "import mp_func as helper"
         _mp_dps_statement = "mp.dps = mp_dps"
     elif _math_type == 'numpy':
-        _import_statement = "import numpy_helper_function as helper\n" \
-                            "from numpy import exp, matrix, asscalar, any\n" \
-                            "from numpy.linalg import cond"
+        _import_statement = "import np_func as helper\n" \
+                            "from numpy import exp, matrix\n"
         _mp_dps_statement = ""
     else:
         raise IOError("_math_type should be 'mpmath or numpy")
@@ -45,7 +43,7 @@ def make_template(_math_type, num_binding_sites, ions, charges, q_type):
         ions_str += ion + "': " + str(charges[index]) + ", '"
     template = template.replace('%%ions%%', ions_str[:-3] + '}')
     if q_type:
-        _global_q = algo_instance.get_q_global_str()
+        _global_q = algo_instance.get_qr_global_str()
         template = template.replace('%%global Q%%', _global_q)
     else:
         template = template.replace('\n%%global Q%%\n', "")

@@ -1,17 +1,27 @@
-__author__ = 'Kyle Vitautas Lopin'
+# Copyright (c) 2015-2016 Kyle Lopin (Naresuan University) <kylel@nu.ac.th>
+# Licensed under the GPL
 
+""" Helper functions to solve an eyring rate model and custom classes to save results
+"""
+# standard libraries
 import Tkinter as tk
 import tkFileDialog
 
-import gui_parameter_frame as param_frame
-import gui_simulation_frame as sim_frame
-import template_maker as script_maker
 import eyring_rate_script
-import result_toplevel
+import paramframe as param_frame
+import result_disp
+import simframe as sim_frame
+import template_maker as script_maker
+
+__author__ = 'Kyle Vitautas Lopin'
 
 
-max_charge = 5
+MAX_CHARGE = 5
 FILEOPTIONS = {'defaultextension': '*.ert_model'}
+FILEOPTIONS['filetypes'] = (("Eyring_rate_model", ".ert_model"),)
+testing = False
+save_filename = 'wide'
+mp_dps_value = 15
 
 
 class EyringGUI(tk.Tk):
@@ -21,9 +31,10 @@ class EyringGUI(tk.Tk):
     """
     def __init__(self, parent=None):
         """
-        Make the initiale frame for the user to select the number of binding sites and the solutes to model.
-        The user also enters the charge of each solute and selects if repulsion factor should be used.  The user
-        can also select to use the mpmath package to solve the problem with
+        Make the initiale frame for the user to select the number of binding sites and
+        the solutes to model.  The user also enters the charge of each solute and selects
+        if repulsion factor should be used.  The user can also select to use the
+        mpmath package to solve the problem with
         """
         tk.Tk.__init__(self, parent)
         # initialize variables to be used later
@@ -56,6 +67,9 @@ class EyringGUI(tk.Tk):
     def process_parameters(self, initial_settings, _saved_settings=None):
         """
         Process information to properly set the initial settings
+        :param initial_settings: get the settings that made the mode, i.e. num binding sites, etc.
+        :param _saved_settings: settings from a saved file or previous model
+        :return calls set_parameters method
         """
         if initial_settings.R_value_used:
             R_str = "R"
@@ -66,16 +80,12 @@ class EyringGUI(tk.Tk):
 
         solutes, charges = self.get_settings(initial_settings)
 
-        print 'making script with num binding sties= ', num_binding_sites
         QR_str = "single Q" + R_str
-
         # make the script for the Eyring rate model
-        print 'mpmath used = ', initial_settings.mpmath_used
         if initial_settings.mpmath_used:
             math_package = 'mpmath'
         else:
             math_package = 'numpy'
-        print 'math package: ', math_package
         _eyring_rate_script = script_maker.make_template(math_package, num_binding_sites,
                                                          solutes, charges, QR_str)
         with open("eyring_rate_script.py", "w") as _file:
@@ -92,21 +102,23 @@ class EyringGUI(tk.Tk):
         :param solute_text:  list of solutes the model is made with
         :param charges: list of the charges each solute has
         :param num_binding_sites: number of binding sites the model has
-        :param _saved_settings:  dict of settings to pass to the simulation and params frame, used by the load function
-        should have a 'param' key with setting for param frame,
+        :param _saved_settings:  dict of settings to pass to the simulation and params
+        frame, used by the load function should have a 'param' key with setting for param frame,
         e.g.{'distance': [0.25, 0.5, 0.75], 'Na': [8.0, -10.0, 8.0], 'Mg': [8.0, -10.0, 8.0]}
         and a 'sim' key with setting for the simulation frame, e.g.
-        {'sim': {'Mge': ['0.0', 'mM'], 'Nae': ['145.0', 'mM'], 'Mgi': ['1.0', 'mM'], 'Nai': ['145.0', 'mM']}
+        {'sim': {'Mge': ['0.0', 'mM'], 'Nae': ['145.0', 'mM'], 'Mgi': ['1.0', 'mM'],
+        'Nai': ['145.0', 'mM']}
         """
-        print 'settings in set: ', _saved_settings
-        # check if the user has inputted any saved parameters, or if there is are already parameters in the frame
+        # check if the user has inputted any saved parameters,
+        # or if there is are already parameters in the frame
         saved_params = None
         if _saved_settings:
             saved_params = _saved_settings['param']  # load the users parameters
         elif self.parameter_frame:
             # take the old parameters of the frame and pass them to the new frame to make it with
             saved_params = self.parameter_frame.energy_barriers
-        if self.parameter_frame:  # if the there is already a parameter frame, destroy it so it can be replaced
+        # if the there is already a parameter frame, destroy it so it can be replaced
+        if self.parameter_frame:
             self.parameter_frame.destroy()
         # have a frame to hold the position of the parameter frome so it doesn't move
         self.hold_parameter_frame.pack(side='left')
@@ -121,29 +133,32 @@ class EyringGUI(tk.Tk):
 
         # make a frame for the user to select the voltages to use and the ion concentrations to use
         _saved_sim_params = None
-        # check if the user has inputted any saved parameters, or if there is are already parameters in the frame
+        # check if the user has inputted any saved parameters,
+        # or if there is are already parameters in the frame
         if _saved_settings:
             _saved_sim_params = _saved_settings['sim']
         elif self.simulation_frame:
             # take the old parameters of the frame and pass them to the new frame to make it with
             _saved_sim_params = self.simulation_frame.get_settings()
-        if self.simulation_frame:  # if the there is already a simulation frame, destroy it so it can be replaced
+        # if the there is already a simulation frame, destroy it so it can be replaced
+        if self.simulation_frame:
             self.simulation_frame.destroy()
-
         # make the frame
-        self.simulation_frame = sim_frame.SimulationWindow(self.top_frame, solute_text, _saved_sim_params)
+        self.simulation_frame = sim_frame.SimulationWindow(self.top_frame,
+                                                           solute_text, _saved_sim_params)
         self.simulation_frame.pack(side='left')
 
-        # add the run button the first time, afterwards change the config, not sure why this is needed but
-        # num_binding_sites will not be correct if the else statement is not included
+        # add the run button the first time, afterwards change the config, not sure why this is
+        # needed but num_binding_sites will not be correct if the else statement is not included
         if not self.run_button:
             self.run_button = tk.Button(self.run_button_frame, text="Run Simulation full",
                                         command=lambda: self.run_simulation(num_binding_sites))
             self.run_button.pack()
         else:
-            self.run_button.config(command=lambda: self.run_simulation(num_binding_sites))  # hackish
+            self.run_button.config(command=lambda: self.run_simulation(num_binding_sites))  # hack
 
-        # change the size of the application depending on how many binding sites and solutes there are
+        # change the size of the application depending on how many binding sites
+        # and solutes there are
         num_solutes = len(solute_text)
         _heigth = int(69 * num_solutes + 450)
         _width = int(88 * num_binding_sites + 980)
@@ -154,24 +169,46 @@ class EyringGUI(tk.Tk):
         if not self.Q_value:
             self.Q_value = [1]  # hack
         barriers = self.parameter_frame.energy_barriers
-        """
-        results have the class Results found in numpy_helper_functions and has the attributes
-        voltage, matrix_specs, ion_transport self.fitting,  current and steady_state
-        """
-        results_eig, results_svd, results_qr = eyring_rate_script.eyring_rate_algo(voltages, concentrations,
+        # results have the class Results found in numpy_helper_functions and has the attributes
+        # voltage, matrix_specs, ion_transport self.fitting,  current and steady_state
+        results_eig, results_svd, results_qr = eyring_rate_script.eyring_rate_algo(voltages,
+                                                                                   concentrations,
                                                                                    barriers,
-                                                                                   num_barriers=num_sites,
-                                                                                   Qs=self.Q_value, Rs=self.R_value)
+                                                                                   Qs=self.Q_value,
+                                                                                   Rs=self.R_value,
+                                                                                   mp_dps=mp_dps_value)
 
         solutes = []
         for solute in results_eig[0].ion_transport:
             solutes.append(solute)
 
-        result_toplevel.MultiPlotWindows(self, voltages, barriers, results_eig, solutes, conc_labels, "Eig results")
+        r1 = result_disp.MultiPlotWindows(self, voltages, barriers, results_eig,
+                                          solutes, conc_labels, "Eig results")
 
-        result_toplevel.MultiPlotWindows(self, voltages, barriers, results_svd, solutes, conc_labels, "SVD results")
+        r2 = result_disp.MultiPlotWindows(self, voltages, barriers, results_svd,
+                                          solutes, conc_labels, "SVD results")
 
-        result_toplevel.MultiPlotWindows(self, voltages, barriers, results_qr, solutes, conc_labels, "QR results")
+        r3 = result_disp.MultiPlotWindows(self, voltages, barriers, results_qr,
+                                          solutes, conc_labels, "QR results")
+
+        if testing:
+            print 'testing with: ', num_sites, mp_dps_value, len(solutes)
+            if self.initial_frame.mpmath_used:
+                math_str = 'mp_'+str(mp_dps_value) + 'dps'
+            else:
+                math_str = 'np'
+
+            filename = (str(num_sites) + 'x' + str(len(solutes)) + '_'
+                        + save_filename + '_' + math_str + '.csv')
+            r1.save_data(filename)
+            r1.save_custom_data(filename)
+            r1.save_custom_data2(filename)
+            r2.save_data(filename)
+            r2.save_custom_data(filename)
+            r2.save_custom_data2(filename)
+            r3.save_data(filename)
+            r3.save_custom_data(filename)
+            r3.save_custom_data2(filename)
 
     def get_settings(self, initial_settings):
         if initial_settings.Q_value_used:
@@ -179,7 +216,7 @@ class EyringGUI(tk.Tk):
         else:
             self.Q_value = None
         if initial_settings.R_value_used:
-            self.R_value = initial_settings.R_entry.get()
+            self.R_value = [float(initial_settings.R_entry.get())]
         else:
             self.R_value = None
 
@@ -187,7 +224,8 @@ class EyringGUI(tk.Tk):
         solutes = []
         for _solute in initial_settings.solutes:
             solute = _solute.get()
-            solutes.append(solute.replace(" ", "_"))  # replace spaces because they can not be used for variable names
+            # replace spaces because they can not be used for variable names
+            solutes.append(solute.replace(" ", "_"))
         # solutes = [i.get().replace(" ", "_") for i in initial_settings.solutes]
 
         # make a list of the charges used, the fancy way
@@ -206,65 +244,81 @@ class EyringGUI(tk.Tk):
         self.config(menu=menubar)
 
     def open_file(self):
+        """
+        Open a file that has settings saved in plain text and extract the number of binding sites,
+        number of solutes, name of the solutes, Q factor (if its used), energy barriers,
+        voltages and solute concentrations
+        :return:
+        """
+        # get file with settings
         filename = tkFileDialog.askopenfilename()
         if not filename:  # user cancelled so just return
             return
+        # try:  # incase the file is not formatted correctly, just close it without doing anything
+        # TODO:  put a pop up to say the file is not formatted correctly
         with open(filename, 'r') as model_file:
             model = model_file.read()
+            # get the number of sited from the file and set the spinbox to that value
             num_sites = self.find_between(model, 'num sites: ', '\n')
             self.initial_frame.num_binding_sites.set(num_sites)
-            print 'num sites: ', num_sites
+            # get a list of the solutes
             solutes = self.find_between(model, '\nsolutes: ', ' \n').split(' ')
             num_solutes = len(solutes)
-            print 'num solutes: ', num_solutes, solutes
-            # self.initial_frame.solutes = solutes
+            # remove all solute entries that were there before and set teh number of solute spinbox
+            # wait to add the solutes until the charges have been extracted
             self.initial_frame.remove_all_solute_entries()
-            self.initial_frame.num_solutes_entries = num_solutes
             self.initial_frame.num_solutes.set(num_solutes)
-            self.initial_frame.solute_num_event(num_solutes)
-
-
+            # get the charges saved and convert the string into ints
             charges_str = self.find_between(model, '\ncharges: ', ' \n').split(' ')
             charges = [int(x) for x in charges_str]
+            # make a solute entry for each solute loaded with the corresponding charge value
             for i, solute in enumerate(solutes):
                 self.initial_frame.add_solute_entry(solute, charges[i])
-            print 'charges: ', charges
+
+            # check if a Q factor is used in the model
             if 'no Q factor' in model:
+                # no Q factor used so set the corresponding values
                 self.initial_frame.Q_value_used = False
-                self.initial_frame.Q_on_off.set(0)
-                self.initial_frame.Q_check_call()
+                self.initial_frame.Q_on_off.set(0)  # uncheck the Q valued used box
+                self.initial_frame.Q_check_call()  # update the value in the initializing frame
             else:
                 self.initial_frame.Q_value_used = True
-                self.initial_frame.Q_on_off.set(1)
-                self.initial_frame.Q_check_call()
+                self.initial_frame.Q_on_off.set(1)  # check the Q valued used box
+                self.initial_frame.Q_check_call()  # update the value in the initializing frame
+                # set the Q value, convert the string to float
                 self.initial_frame.Q_value = float(self.find_between(model, 'Q factor: ', '\n'))
+        # the file may not have the other simulation values so check first
         if 'energy barriers:' in model:
             # the model has a parameter and simulation frame settings
+            # get the solutes energy barriers and distances and put in the dict _energy_barriers
             _parameter_settings_str = self.find_between(model, '\nenergy barriers: ', '\nvoltages:')
-            print 'param setting str ', _parameter_settings_str
             _energy_barriers = dict()
             for _setting_str in _parameter_settings_str.split('\n'):
                 _key, _values = _setting_str.split(':')
                 _energy_barriers[_key] = [float(x) for x in _values.split(', ')]
-            print 'energy build: ', _energy_barriers
 
+            # get the voltages used
+            _voltage_settings_str = self.find_between(model, '\nvoltages:',
+                                                      '\nsolute concentrations:')
+            _voltages = [int(x) for x in _voltage_settings_str.split(', ')]
 
-
+            # get the solute concentrations
             _simulation_settings_str = model.split('solute concentrations:\n')[1]
-            print 'sim settings: ', _simulation_settings_str
             _sim_settings = dict()
+            _sim_settings['voltage'] = _voltages
             for _conc in _simulation_settings_str.split('\n'):
                 if _conc:
-                    print 'conc: ', _conc
                     _key, _value = _conc.split(': ')
                     _sim_settings[_key] = [_value[:-2], _value[-2:]]
-            print 'sim settings: done', _sim_settings
+            # package the settings and start the process of making the simulation
+            # and parameter frames
             _settings = dict()
             _settings['param'] = _energy_barriers
             _settings['sim'] = _sim_settings
             self.process_parameters(self.initial_frame, _settings)
-
-        # self.initial_frame.update()
+        # except Exception as e:
+            # print 'failure opening', str(e)
+            # pass  # if something fails, is probably due to
 
     def find_between(self, target, _start, _end):
         """
@@ -272,17 +326,15 @@ class EyringGUI(tk.Tk):
         """
         return target.split(_start)[1].split(_end)[0]
 
-
     def save_settings(self):
         """
         Save the settings of the model into a file so the user can load them later
         """
         solutes, charges = self.get_settings(self.initial_frame)
         if self.initial_frame.Q_value_used:
-            _Qstr = 'Q factor: ' + self.initial_frame.Q_value.get()
+            _Qstr = 'Q factor: ' + str(self.initial_frame.Q_value)
         else:
             _Qstr = 'no Q factor'
-
         filename = tkFileDialog.asksaveasfilename(**FILEOPTIONS)
         if not filename:
             return
@@ -311,8 +363,9 @@ class EyringGUI(tk.Tk):
 
 class InitialFrame(tk.Frame):
     """
-    Frame for the user select parameters to run an Eyring rate model with by selecting the number
-    of binding sites, the number of solutes, the names of the solutes, and if there is a Q and or an R factor
+    Frame for the user select parameters to run an Eyring rate model with by selecting
+    the number of binding sites, the number of solutes, the names of the solutes, and if
+    there is a Q and or an R factor
     public attributes::
     solutes: list of solutes the user wants to use
     charges: list of charges of the solutes, indexed to be the same order as solutes
@@ -323,7 +376,7 @@ class InitialFrame(tk.Frame):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master=master)
         self._solute_entry_boxes = []  # list of the tk.Entry for the user to entry solutes' names
-        self._charge_spinboxes = []  # list of tk.Spinboxes for the user to select the solutes' charges
+        self._charge_spinboxes = []  # list of tk.Spinbox for the user to select the solutes charges
         self.solutes = []  # list to store the string of names of the solutes the user inputs
         self.charges = []  # list to store the valence charge of the solutes
         self.Q_value_used = False  # to tell if the user wants to use a Q value
@@ -332,15 +385,16 @@ class InitialFrame(tk.Frame):
         self.R_entry = None  # initialize
         self.mpmath_used = False
 
-        # make region for the user to select the number of binding sites and bind the number to self.num_binding_sites
+        # make region for the user to select the number of binding sites and bind the
+        # number to self.num_binding_sites
         self.num_binding_sites = tk.IntVar()
         tk.Label(master=self, text="Number of binding sites").pack(side='top', pady=5)
         tk.Spinbox(self, from_=1, to=6,
                    textvariable=self.num_binding_sites,
                    width=5).pack(side='top', pady=1)
 
-        # make a place wher ethe user can choose the number of solutes to include in the model and bind the
-        # number to solute_num_event to be called when the user clicks on the spinbox
+        # make a place where ethe user can choose the number of solutes to include in the model
+        # and bind the number to solute_num_event to be called when the user clicks on the spinbox
         self.num_solutes_entries = 1
         self.num_solutes = tk.IntVar()
         tk.Label(master=self, text="Numebr of solutes").pack(side='top', pady=5)
@@ -421,7 +475,8 @@ class InitialFrame(tk.Frame):
     def init_charge_frame(self):
         tk.Label(self._charges_frame, text="Charge").pack(side='top')
         self.charges.append(tk.IntVar())
-        self._charge_spinboxes.append(tk.Spinbox(self._charges_frame, from_=-max_charge, to=max_charge,
+        self._charge_spinboxes.append(tk.Spinbox(self._charges_frame,
+                                                 from_=-MAX_CHARGE, to=MAX_CHARGE,
                                                  textvariable=self.charges[0], width=3))
         self._charge_spinboxes[0].pack(side='top')
 
@@ -454,7 +509,8 @@ class InitialFrame(tk.Frame):
         self.charges.append(tk.IntVar())
         if _charge:
             self.charges[-1].set(_charge)
-        self._charge_spinboxes.append(tk.Spinbox(self._charges_frame, from_=-max_charge, to=max_charge,
+        self._charge_spinboxes.append(tk.Spinbox(self._charges_frame,
+                                                 from_=-MAX_CHARGE, to=MAX_CHARGE,
                                                  textvariable=self.charges[-1], width=3))
         self._charge_spinboxes[-1].pack(side='top')
         # update number of solute entries and update the frame

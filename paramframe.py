@@ -6,8 +6,6 @@ import pyplot_to_tkinter as pytink
 __author__ = 'Kyle Vitautas Lopin'
 
 
-voltages = range(-150, 110, 10)
-
 class ParameterSelectionFrame(tk.Frame):
     """
     Class to make and display a energy barrier and binding site profile
