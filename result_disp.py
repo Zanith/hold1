@@ -1,3 +1,9 @@
+# Copyright (c) 2015-2016 Kyle Lopin (Naresuan University) <kylel@nu.ac.th>
+# Licensed under the GPL
+
+""" Class to display results
+"""
+# standard libraries
 import Tkinter as tk
 import csv
 from tkFileDialog import asksaveasfilename
@@ -7,24 +13,29 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 
 __author__ = 'Kyle Vitautas Lopin'
 
-colors = ['k', 'r', 'b', 'g', 'm', 'c']
+COLORS = ['k', 'r', 'b', 'g', 'm', 'c']
 
 
 class MultiPlotWindows(tk.Toplevel):
+    """
+    Class to display results from Eyring rate model
+    """
     def __init__(self, master, voltage, energy_profile, results, solutes, conc_label, _title):
         """
-        Make a tkinter toplevel that displays the 1) energy profiles, and 2) concentrations used for the simulation with
-        3) the current per channel and 4) each solutes transport rates calculated in matplotlib subplots
+        Make a tkinter toplevel that displays the 1) energy profiles, and 2) concentrations used
+        for the simulation with 3) the current per channel and 4) each solutes transport rates
+        calculated in matplotlib subplots
         :param master:  root tk.Tk the toplevel is made from
         :param voltage: list of voltages to display
-        :param energy_profile:  dict of energy profiles used in the calculation.  The keys are the solutes used plus a
-        'distance'  entry, the values are a list of the energy potentials of the barriers and binding sites except for
-        the 'distance' value which is a list of the electrical distances used
+        :param energy_profile:  dict of energy profiles used in the calculation.  The keys are the
+        solutes used plus a 'distance'  entry, the values are a list of the energy potentials
+        of the barriers and binding sites except for the 'distance' value which is a list
+        of the electrical distances used
         :param results: claa Results found in numpy_helper_function
         :param solutes:  list of the strings of the solutes used
-        :param conc_label: dict of concentrations used, the keys are the solutes + a 'e' or 'i' to represent if the
-        concentration is the extra or intracellular concentration, the values are strings of the user
-        entered concentrations
+        :param conc_label: dict of concentrations used, the keys are the solutes + a 'e' or 'i'
+        to represent if the concentration is the extra or intracellular concentration, the values
+        are strings of the user entered concentrations
         :return:
         """
         tk.Toplevel.__init__(self, master=master)
@@ -40,20 +51,22 @@ class MultiPlotWindows(tk.Toplevel):
         # dictionary to hold transport rates, keys are solutes and values are the a list
         # transport rates over each barrier
         self.transport = dict()
-        transport_errors = dict()  # keep any differences between different transport rates over different barriers
+        # keep any differences between different transport rates over different barriers
+        transport_errors = dict()
         self.current = []  # calculated current
-        ss = []  # steady state solution of states
+        steady_state = []  # steady state solution of states
         for solute in solutes:
             self.transport[solute] = []
             transport_errors[solute] = []
         for result in results:
-            ss.append(result.steady_state)
+            steady_state.append(result.steady_state)
             self.current.append(result.current[1])  # use the transport over the second barrier
             for solute in solutes:
                 # get the ions transported over the 2nd barrier
                 self.transport[solute].append(result.ion_transport[solute][1])
                 # get errors calculated for the ions transported over the different barriers
-                transport_errors[solute].append(max(result.ion_transport[solute])-min(result.ion_transport[solute]))
+                transport_errors[solute].append(max(result.ion_transport[solute])
+                                                -min(result.ion_transport[solute]))
         if len(solutes) < 2:
             self._size = (2, 2)
         elif len(solutes) > 3:
@@ -78,7 +91,8 @@ class MultiPlotWindows(tk.Toplevel):
         self.display_concentrations(conc_label)
 
         # make current graph
-        self.plot_routine(self.current, "current (pA)", "Total Current per Channel", 3, sci_format=True)
+        self.plot_routine(self.current, "current (pA)",
+                          "Total Current per Channel", 3, sci_format=True)
 
         # make transport plots for each solute transported
         _index = 4
@@ -96,13 +110,16 @@ class MultiPlotWindows(tk.Toplevel):
         toolbar.update()
 
         # make button to save data
-        tk.Button(self, text='Save data', command=self.save_data).pack(side='bottom')
+        tk.Button(self, text='Save data',
+                  command=self.save_data).pack(side='bottom')
 
         # make button to make a custom save data function
-        tk.Button(self, text='Save custom_data', command=self.save_custom_data).pack(side='bottom')
+        tk.Button(self, text='Save custom_data',
+                  command=self.save_custom_data).pack(side='bottom')
 
         # make button to make a custom save data function
-        tk.Button(self, text='Save custom_data2', command=self.save_custom_data2).pack(side='bottom')
+        tk.Button(self, text='Save custom_data2',
+                  command=self.save_custom_data2).pack(side='bottom')
 
     def display_concentrations(self, conc_label):
         """
@@ -137,7 +154,8 @@ class MultiPlotWindows(tk.Toplevel):
         _plot.plot(self.voltages, y)
         _plot.set_xlabel("voltage (mV)")
         _plot.set_ylabel(_ylabel)
-        _plot.set_title(_title, y=1.08)  # move the title up to get it out of the way of the science formatting thing
+        # move the title up to get it out of the way of the science formatting thing
+        _plot.set_title(_title, y=1.08)
         if sci_format:
             _plot.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
 
@@ -214,7 +232,8 @@ class MultiPlotWindows(tk.Toplevel):
 
             for solute in self.solutes:
                 # get errors calculated for the ions transported over the different barriers
-                transport_errors[solute].append(max(result.ion_transport[solute])-min(result.ion_transport[solute]))
+                transport_errors[solute].append(max(result.ion_transport[solute])
+                                                -min(result.ion_transport[solute]))
 
         if not filename:  # get filename from user and open file
             filename = asksaveasfilename(defaultextension=".csv")
@@ -225,7 +244,8 @@ class MultiPlotWindows(tk.Toplevel):
             # make a header with simulation details as the first line
             header_row = [str(self.energy_profile), str(self.conc_label)]
             writer.writerow(header_row)
-            _row = ['voltage', 'largest element', 'smallest element', 'element difference', 'element ratio difference',
+            _row = ['voltage', 'largest element', 'smallest element',
+                    'element difference', 'element ratio difference',
                     'condition number']
             for solute in self.solutes:
                 _row.append('transport error '+solute)
@@ -234,11 +254,13 @@ class MultiPlotWindows(tk.Toplevel):
             writer.writerow(_row)
 
             for i, voltage in enumerate(voltages):
-                _row = [voltage, largest_element[i], smallest_element[i], element_difference[i], ratio_of_elements[i],
+                _row = [voltage, largest_element[i], smallest_element[i],
+                        element_difference[i], ratio_of_elements[i],
                         condition_number[i]]
                 for solute in self.solutes:
                     _row.append(transport_errors[solute][i])
-                _row.extend([current_errors[i], smallest_eig[i], second_smallest_eig[i], sae[i], sse[i]])
+                _row.extend([current_errors[i], smallest_eig[i],
+                             second_smallest_eig[i], sae[i], sse[i]])
                 writer.writerow(_row)
 
     def save_custom_data2(self, filename=None):
@@ -257,11 +279,11 @@ class MultiPlotWindows(tk.Toplevel):
             writer.writerow(header_row)
             # make column headers with details of the columns
             _row = ['voltage']
-            _i = len(self.results[0].current)
-            for i in range(_i):
+            len_results = len(self.results[0].current)
+            for i in range(len_results):
                 _row.append('current, barrier %d' % i)
             for solute in self.solutes:
-                for i in range(_i):
+                for i in range(len_results):
                     _row.append('%s transport over barrier %d' % (solute, i))
             writer.writerow(_row)
 
@@ -279,8 +301,9 @@ def energy_plot(plot_axis, profiles):
     """
     Make a graph of energy profiles
     :param plot_axis: the pyplot figure to graph in
-    :param profiles: dictionary of energy profiles to graph, must have a key 'distance' with the electrical
-    distances to graph on the x-axis and the other values are lists with the energy barrier values
+    :param profiles: dictionary of energy profiles to graph, must have a key 'distance'
+    with the electrical distances to graph on the x-axis and the other values are lists with
+    the energy barrier values
     :return:
     """
 
@@ -290,7 +313,7 @@ def energy_plot(plot_axis, profiles):
     for solute in profiles:
         if solute != 'distance':
             y = [0, 0] + profiles[solute] + [0, 0]
-            plot_axis.plot(x, y, colors[i], label=solute)
+            plot_axis.plot(x, y, COLORS[i], label=solute)
             i += 1
     # TODO: put concentrations in energy barrier graph?
     # ymin, ymax = plot_axis.get_ylim()
@@ -307,13 +330,22 @@ def energy_plot(plot_axis, profiles):
 
 if __name__ == '__main__':
     # to test the toplevel pass in these test values to run it
-    app = tk.Tk()
-    voltage = range(-150, 110, 10)
-    current = range(-15, 11, 1)
-    transported = {'solute_1': [-378450.7354495374, -338463.9353080591, -301864.595992801, -268286.4190144333, -237393.3426917416, -208876.17873336677, -182449.51777746368, -157848.87291887807, -134828.03263530295, -113156.59661960867, -92617.66985612901, -73005.69186244335, -54124.37937097749, -35784.761860088474, -17803.290273569044, -1.4551915228366852e-11, 17803.290273569044, 35784.761860088474, 54124.379370977476, 73005.69186244336, 92617.66985612901, 113156.59661960864, 134828.03263530298, 157848.87291887804, 182449.5177774637, 208876.1787333668]}
-    profile = {'distance': [0.25, 0.5, 0.75], 'solute_1': [8.0, -10.0, 8.0]}
-    conc_label = {'solute_1i': '120.0 mM', 'solute_1e': '1.0 M', 'solute 2i': '120.0 mM', 'solute 2e': '1.0 M'}
-    concs = {'solute_1i': 0.001, 'solute_1e': 0.001}
-    size = (2, 2)
-    MultiPlotWindows(app, voltage, current, transported, profile, conc_label)
-    app.mainloop()
+    APP = tk.Tk()
+    VOLTAGE = range(-150, 110, 10)
+    CURRENT = range(-15, 11, 1)
+    TRANSPORTED = {'solute_1': [-378450.7354495374, -338463.9353080591, -301864.595992801,
+                                -268286.4190144333, -237393.3426917416, -208876.17873336677,
+                                -182449.51777746368, -157848.87291887807, -134828.03263530295,
+                                -113156.59661960867, -92617.66985612901, -73005.69186244335,
+                                -54124.37937097749, -35784.761860088474, -17803.290273569044,
+                                -1.4551915228366852e-11, 17803.290273569044, 35784.761860088474,
+                                54124.379370977476, 73005.69186244336, 92617.66985612901,
+                                113156.59661960864, 134828.03263530298, 157848.87291887804,
+                                182449.5177774637, 208876.1787333668]}
+    PROFILE = {'distance': [0.25, 0.5, 0.75], 'solute_1': [8.0, -10.0, 8.0]}
+    CONC_LABEL = {'solute_1i': '120.0 mM', 'solute_1e': '1.0 M',
+                  'solute 2i': '120.0 mM', 'solute 2e': '1.0 M'}
+    CONCS = {'solute_1i': 0.001, 'solute_1e': 0.001}
+    SIZE = (2, 2)
+    MultiPlotWindows(APP, VOLTAGE, CURRENT, TRANSPORTED, PROFILE, CONC_LABEL, "test")
+    APP.mainloop()

@@ -1,3 +1,8 @@
+# Copyright (c) 2015-2016 Kyle Lopin (Naresuan University) <kylel@nu.ac.th>
+# Licensed under the GPL
+""" Classes and methods to use to make an Eyring Rate Model
+"""
+
 __author__ = 'Kyle Vitautas Lopin'
 
 
@@ -6,8 +11,8 @@ class EryingRateMaker(object):
     Class to make rates to calculate transition rates of an erying rate model
     """
     def __init__(self, _math_package, num_binding_sites, list_ions, ion_charges):
-
-        # make the rates of ions moving forward (towards the intracellular side) and backwards separately
+        # make the rates of ions moving forward (towards the intracellular side)
+        # and backwards separately
         forward_rates = []
         backward_rates = []
 
@@ -32,15 +37,16 @@ class EryingRateMaker(object):
         # make a copy of the rates to be used to make a global statement in the script
         self.global_rate_names = self.rates[:]
 
-        # make the right side of the rate assignment equations, ie. = mp.mpf(Nae*k0*exp(-GNa1)*exp(1*q*-d1*V))
+        # make the right side of the rate assignment equations,
+        # ie. = mp.mpf(Nae*k0*exp(-GNa1)*exp(1*q*-d1*V))
         self.make_right_side_rate_equation(_math_package)
-        self.make_transport_rates()
+        self._make_transport_rates()
         self.ion_assign_str = ""
-        self.make_ion_assignment(list_ions)
+        self._make_ion_assignment(list_ions)
         self.electrical_distance_str = ""
-        self.make_elec_dist_str(num_binding_sites)
+        self._make_elec_dist_str(num_binding_sites)
         self.energy_barrier_str = ""
-        self.make_energy_barrier_str(num_binding_sites)
+        self._make_energy_barrier_str(num_binding_sites)
 
     def make_right_side_rate_equation(self, math_package):
         """
@@ -60,7 +66,8 @@ class EryingRateMaker(object):
             _end = ")"
         # go through each rate int  self.rates
         for i in range(len(self.rates)):
-            # get the binding sides and the ion that is moving, k_0_1_Na => k 0 1 Na and assign them proper place
+            # get the binding sides and the ion that is moving, k_0_1_Na => k 0 1 Na
+            # and assign them proper place
             rate_elements = self.rates[i].split('_', 3)
             ion = rate_elements[3]
             rate_elements[1] = int(rate_elements[1])  # convert str to int
@@ -70,13 +77,13 @@ class EryingRateMaker(object):
             charge_index = self.list_ions.index(ion)
             ion_charge = self.ion_charges[charge_index]
             rate_start = ""  # initialize a string to put at the beginning
-
-            if rate_elements[1] == 0:  # this rate is an ion moving into the channel from extracellular side
+            # this rate is an ion moving into the channel from extracellular side
+            if rate_elements[1] == 0:
                 energy_barrier_str = '-G'+ion+'1'
                 electrical_distance_str = '-d1'
                 rate_start += (ion+"e*")
-            elif (rate_elements[1] == self.num_binding_sites+1 and  # the ion is from the last binding site to
-                  rate_elements[2] == self.num_binding_sites):  # the intracellular side
+            elif (rate_elements[1] == self.num_binding_sites+1 and  # the ion is from the last
+                  rate_elements[2] == self.num_binding_sites):  # site to the intracellular side
                 str_num = str(2*self.num_binding_sites+1)
                 energy_barrier_str = '-G'+ion+str_num
                 electrical_distance_str = '(1-d'+str_num+')'
@@ -93,10 +100,9 @@ class EryingRateMaker(object):
                              + '*exp(' + str(ion_charge) + '*q*' \
                              + electrical_distance_str + '*V)'
 
-    def make_transport_rates(self):
+    def _make_transport_rates(self):
         """
-
-        :return:
+        make the rates of how the ions are transported over a barrier
         """
         for ion in self.list_ions:
             self.transport_rates[ion] = []
@@ -106,12 +112,17 @@ class EryingRateMaker(object):
 
     def get_rates_str(self):
         """
-        Export a string that assign ion movement rates (ie. k_0_1_Na = Nai*ko*exp(-GNa1)*exp(1*q*-d1*V))
+        Export a string that assign ion movement rates
+        (ie. k_0_1_Na = Nai*ko*exp(-GNa1)*exp(1*q*-d1*V))
         :return:
         """
         return '    ' + '\n    '.join(self.rates)
 
     def get_global_variables_str(self):
+        """
+        Get a string to make the rates global
+        :return:
+        """
         line_cutoff = 70  # make a new line if the current one gets too long
         _str = "    global "
         for rate in self.global_rate_names:
@@ -126,17 +137,31 @@ class EryingRateMaker(object):
 
         return _str[:-2]
 
-    def make_ion_assignment(self, ions):
+    def _make_ion_assignment(self, solutes):
+        """
+        Make a string to assign the concentrations from the input variable ion_conc in the
+        Eyring rate script
+        :param solutes: list of solutes
+        """
         _str = ""
-        for ion in ions:
+        for ion in solutes:
             _str += '    ' + ion + 'i' + " = ion_concs['" + ion + "i']\n"
             _str += '    ' + ion + 'e' + " = ion_concs['" + ion + "e']\n"
         self.ion_assign_str = _str[:-1]
 
     def get_ion_assignment_str(self):
+        """
+        Get the string representing how the solutes should be assigned
+        :return: string
+        """
         return self.ion_assign_str
 
-    def make_elec_dist_str(self, num):
+    def _make_elec_dist_str(self, num):
+        """
+        Make a string to assign the electrical distance variables to the inputted dict
+        energy_barriers in the Eyring Rate script
+        :param num: number of binding sites
+        """
         _str = ""
         for i in range(2*num+1):
             _str += '    d' + str(i+1) \
@@ -145,9 +170,18 @@ class EryingRateMaker(object):
         self.electrical_distance_str = _str[:-1]
 
     def get_electrical_distance_str(self):
+        """
+        get the string assigning the electrical distance variables
+        :return: string
+        """
         return self.electrical_distance_str
 
-    def make_energy_barrier_str(self, num):
+    def _make_energy_barrier_str(self, num):
+        """
+        Make a string to assign the individual energy levels from the inputted dict
+        energy_barriers in the Eyring Rate script
+        :param num: number of binding sites
+        """
         _str = ""
         for ion in self.list_ions:
             for i in range(2*num+1):
@@ -157,6 +191,10 @@ class EryingRateMaker(object):
         self.energy_barrier_str = _str[:-2]
 
     def get_energy_barrier_str(self):
+        """
+        Get the string assigning the energy barrier variables
+        :return: string
+        """
         return self.energy_barrier_str
 
     def __str__(self):
@@ -165,12 +203,6 @@ class EryingRateMaker(object):
 
 
 if __name__ == "__main__":
-    rates = EryingRateMaker(2, ['Na', 'Ca'], [1, 2])
-    print rates.get_rates_str()
-    print rates.get_global_variables_str()
-
-
-class TransportClass(object):
-    def __init__(self, _str):
-        self.string = _str
-        self.list = []
+    RATES = EryingRateMaker('numpy', 2, ['Na', 'Ca'], [1, 2])
+    print RATES.get_rates_str()
+    print RATES.get_global_variables_str()

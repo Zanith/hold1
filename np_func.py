@@ -15,6 +15,8 @@ __author__ = 'Kyle Vitautas Lopin'
 
 # logging setup to measure time to calculate steady states
 LOGGER = logging.getLogger('timer')
+FORMAT = '%(asctime)-15s %(message)s'
+
 HANDLER = logging.FileHandler('np_timing.txt')
 LOGGER.addHandler(HANDLER)
 LOGGER.setLevel(logging.INFO)
@@ -179,9 +181,9 @@ def two_largest(num_list):
 
 def smallest_largest_elements(_matrix):
     """
-    get the smallest and largest non-zero elements of a matrix
-    :param _matrix:
-    :return:
+    get the smallest and largest non-zero elements of a matrix in absolute terms
+    :param _matrix: matrix to search
+    :return: largest number, smallest number
     """
     abs_matrix = np.fabs(_matrix)
     smallest_element = np.amin(abs_matrix[np.nonzero(abs_matrix)])

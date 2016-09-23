@@ -1,16 +1,21 @@
+# Copyright (c) 2015-2016 Kyle Lopin (Naresuan University) <kylel@nu.ac.th>
+# Licensed under the GPL
+""" Class to make frame for user to select solute concentrations
+"""
+# standard libraries
 import Tkinter as tk
 
 
 __author__ = 'Kyle Vitautas Lopin'
 
-conc_options = ['M', 'mM', 'uM', 'nM', 'pM', 'fM']
+CONC_OPTIONS = ['M', 'mM', 'uM', 'nM', 'pM', 'fM']
 
 
 class SimulationWindow(tk.Frame):
     """
     Make a frame that allows the user to input a voltage range and ion concentrations
-    Use get_run_simulation_settings() to get the values the user entered
-    get_settings() is used to redisplay previous values into a new display by putting the values into _settings
+    Use get_run_simulation_settings() to get the values the user entered get_settings()
+    is used to redisplay previous values into a new display by putting the values into _settings
     """
     def __init__(self, _master, solutes, _settings=None, *args):
         """
@@ -27,7 +32,8 @@ class SimulationWindow(tk.Frame):
         self.voltage_setting = [-150, 100, 10]
         if _settings:  # if settings were inputted load those, else make a blank dict to put them in
             self.voltage_setting = _settings.pop('voltage', [-150, 100, 10])
-            self.solute_conc_vars_settings = _settings  # to set the tk variables for the user selected concentrations
+            # to set the tk variables for the user selected concentrations
+            self.solute_conc_vars_settings = _settings
         else:
             self.solute_conc_vars_settings = dict()
         self.solute_conc_vars = dict()  # to save tk variables in, values are lists
@@ -50,7 +56,7 @@ class SimulationWindow(tk.Frame):
         # voltages = []
         # for voltage in self.voltage_range:
         #     voltages.append(voltage.get())
-        voltages  = [x.get() for x in self.voltage_range]  # get voltages
+        voltages = [x.get() for x in self.voltage_range]  # get voltages
         settings = dict()
         settings['voltage'] = voltages
         for key in self.solute_conc_vars:  # get ion concentrations
@@ -76,9 +82,11 @@ class SimulationWindow(tk.Frame):
         ion_concs = dict()  # to put the numerical values in Molar, i.e. 0.001 M = 1 mM
         conc_label = dict()  # make string labels to print to the user, i.e. '1mM'
         for key in self.solute_conc_vars:
-            _power = 10**(-3*conc_options.index(self.solute_conc_vars[key][1].get()))  # convert mM to 10**-3 etc.
+            # convert mM to 10**-3 etc.
+            _power = 10**(-3 * CONC_OPTIONS.index(self.solute_conc_vars[key][1].get()))
             ion_concs[key] = self.solute_conc_vars[key][0].get() * _power
-            conc_label[key] = str(self.solute_conc_vars[key][0].get()) + ' ' + self.solute_conc_vars[key][1].get()
+            conc_label[key] = (str(self.solute_conc_vars[key][0].get())
+                               + ' ' + self.solute_conc_vars[key][1].get())
         return voltage_range, ion_concs, conc_label
 
     def make_voltage_selection(self, _frame):
@@ -116,7 +124,8 @@ class SimulationWindow(tk.Frame):
 
     def make_solute_concentration(self, _frame, solutes):
         """
-        Make a space where the user can enter the intracellular and extracellular concentrations to use
+        Make a space where the user can enter the intracellular and extracellular
+        concentrations to use
         :param _frame:  frame where the entry and spinboxes will be placed
         :param solutes:  list of the solutes to make entries for
         :return:  nothing, bind the instances to self.solute_conc_vars
@@ -124,12 +133,15 @@ class SimulationWindow(tk.Frame):
         for solute in solutes:
             # for each solute make a frame to put a entry and spinbox for the
             # intracellular and extracellular concentrations
-            solute_frame_instance = tk.Frame(_frame, highlightbackground='light slate gray', highlightthickness=2)
+            solute_frame_instance = tk.Frame(_frame,
+                                             highlightbackground='light slate gray',
+                                             highlightthickness=2)
             solute_frame_instance.pack(side='top')
 
             tk.Label(solute_frame_instance, text=solute+" concentrations:").pack(side='top')
             # use a subroutine make the options for the intra and extracellular choices
-            # this routine will return a list of an intvar and a StringVar to represent the concentration and units
+            # this routine will return a list of an intvar and a StringVar to
+            # represent the concentration and units
             self.solute_conc_vars[solute+'i'] = self.make_single_solute_conc(solute_frame_instance,
                                                                              solute, "intra")
             self.solute_conc_vars[solute+'e'] = self.make_single_solute_conc(solute_frame_instance,
@@ -146,7 +158,9 @@ class SimulationWindow(tk.Frame):
         amount (IntVar) and the unit (StringVar) the user selected
         """
         # make a frame with an outline to put the widgets in
-        intra_frame_instance = tk.Frame(_frame, highlightbackground='LightBlue3', highlightthickness=2)
+        intra_frame_instance = tk.Frame(_frame,
+                                        highlightbackground='LightBlue3',
+                                        highlightthickness=2)
         intra_frame_instance.pack(side='left')
         # make a label above the widgets
         tk.Label(intra_frame_instance, text=_type+"cellular concentration:").pack(side='top')
@@ -158,19 +172,20 @@ class SimulationWindow(tk.Frame):
         conc_option_var = tk.StringVar()
         # _type[0] is either 'i' or 'e'
         # solute+_type[0]: e.g., Nai or Nae
-        if solute+_type[0] in self.solute_conc_vars_settings:  # check if the solute has been used before and if
+        # check if the solute has been used before and if
+        if solute+_type[0] in self.solute_conc_vars_settings:
             # so then enter the previous values into the new instances
             previously_entered_values = self.solute_conc_vars_settings[solute+_type[0]]
             previous_conc = previously_entered_values[0]
             previous_order = previously_entered_values[1]
-            if previous_order not in conc_options:  # if the unit is M, then delete
+            if previous_order not in CONC_OPTIONS:  # if the unit is M, then delete
                 previous_order = previous_order[1]
             intra_var_instance.set(previous_conc)
-            _option_index = conc_options.index(previous_order)
-            conc_option_var.set(conc_options[_option_index])
+            _option_index = CONC_OPTIONS.index(previous_order)
+            conc_option_var.set(CONC_OPTIONS[_option_index])
         else:  # else just set the concentration to 1 mM
             intra_var_instance.set(1)
-            conc_option_var.set(conc_options[1])
+            conc_option_var.set(CONC_OPTIONS[1])
         # make spinbox the user to set the concentration with
         spinbox_instance_intra = tk.Spinbox(intra_frame_instance,
                                             textvariable=intra_var_instance,
@@ -179,14 +194,14 @@ class SimulationWindow(tk.Frame):
 
         # make option menu for use to select concentration units, i.e. mM, uM, nM etc.
         conc_option_menu = tk.OptionMenu(intra_frame_instance, conc_option_var,
-                                         *conc_options)
+                                         *CONC_OPTIONS)
         conc_option_menu.config(width=7)
         conc_option_menu.pack(side='left')
         return [intra_var_instance, conc_option_var]
 
 
 if __name__ == '__main__':
-    app = tk.Tk()
-    solutes1 = ['Na', 'Ca', 'Mg']
-    apptop = SimulationWindow(app, solutes1, None)
-    app.mainloop()
+    APP = tk.Tk()
+    SOLUTES1 = ['Na', 'Ca', 'Mg']
+    APP_TOP = SimulationWindow(APP, SOLUTES1, None)
+    APP.mainloop()

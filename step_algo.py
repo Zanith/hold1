@@ -1,9 +1,17 @@
+# Copyright (c) 2015-2016 Kyle Lopin (Naresuan University) <kylel@nu.ac.th>
+# Licensed under the GPL
+""" Classes and methods to use to make an Eyring Rate Model
+"""
+
 __author__ = 'Kyle Vitautas Lopin'
 
-power_symbol = '**'
+POWER_SYMBOL = '**'
 
 
 class QClass(object):
+    """
+    Make a class to represent an ion in a position in the channel with a charge
+    """
     def __init__(self, _q, _index):
         self.place = str(_index + 1)
         self.charge = _q
@@ -21,9 +29,9 @@ class TransportClass(object):
         """
         Initialize the class by make the proper data structure.  The basis of the class is a list
         where the ith entry is the rate for the (i+1) barrier if the first barrier is counted as 1
-        Each element in the base list is a dictionary where the keys of the dictionary is the string of the
-        ion being transported and the value of the dictionary is a list that contains the rates of ion
-        movement over a barrier.
+        Each element in the base list is a dictionary where the keys of the dictionary is the
+        string of the ion being transported and the value of the dictionary is a list that
+        contains the rates of ion movement over a barrier.
 
         To access a value go to self.list[number of the barrier - 1][name of the ion]
 
@@ -38,9 +46,21 @@ class TransportClass(object):
                 self.list[barrier_number-1][ion] = []
 
     def update(self, barrier, ion, rate_str, state_index):
+        """
+        add a new rate to the class
+        :param barrier: barrier the rate is for
+        :param ion: ion the rate is for
+        :param rate_str: rate string
+        :param state_index: which state the rate is for, indexed to state vector
+        :return:
+        """
         self.list[barrier-1][ion].append((rate_str, state_index))
 
     def display(self):
+        """
+        Print out the ions and values in the class
+        :return:
+        """
         barrier_number = 0
         for barrier in self.list:
             barrier_number += 1
@@ -82,8 +102,8 @@ class EryingRateModelMaker(object):
         'full Q' puts a Q for each ion-ion interaction
         'full QR' puts Q's and Rs for each ion-ion interact
         :return: makes a matrix bound to self that represents the transition matrix of the form
-        X' = A*X, where X is a vector of possible channel configurations and A is matrix that describes how
-        the channel configurations change
+        X' = A*X, where X is a vector of possible channel configurations and A is matrix
+        that describes how the channel configurations change
         also make a vector (channel_configs) that represents the different configurations
         (states) the channel can take
         """
@@ -95,7 +115,7 @@ class EryingRateModelMaker(object):
         self.q_str = ""
         self.q_global_list = []
         if q_type:
-            self.make_Q_assignment()
+            self._make_Q_assignment()
         self.channel_configs = [[0] * num_binding_sites]
         self.new_channel_configs = self.channel_configs[:]  # prevent aliasing
         self.matrix = [['0']]
@@ -104,27 +124,29 @@ class EryingRateModelMaker(object):
         self.backward_transport = TransportClass(list_ions, num_binding_sites+1)
         # go through all channel configurations and check if they can transition to another state
         while self.new_channel_configs:
-            # get the first config in the new_channel_config list and see if that state can transition to another state
+            # get the first config in the new_channel_config list and see if that state can
+            # transition to another state
             channel_state = self.new_channel_configs.pop(0)
             # keep track of what the original state is
             original_state_index = self.channel_configs.index(channel_state)
             # check if an ion can enter the channel configuration from the extracellular side
-            self.check_for_ion_entry(channel_state, original_state_index)
+            self._check_for_ion_entry(channel_state, original_state_index)
             # check if an ions can move forward in the pore
-            self.check_for_hop(channel_state, original_state_index)
+            self._check_for_hop(channel_state, original_state_index)
             # check if an ion can exit the channel to the intracellular side
-            self.check_for_ion_exit(channel_state, original_state_index)
+            self._check_for_ion_exit(channel_state, original_state_index)
 
-        self.add_diagonal_rates()
+        self._add_diagonal_rates()
         # self.forward_transport.output_rate(1, "Na")
         # self.backward_transport.output_rate(1, "Na")
 
-    def check_for_ion_entry(self, config, original_state_index):
+    def _check_for_ion_entry(self, config, original_state_index):
         """
         Check if a channel state can change if an ion can enters it and update
         the channel_configs and matrix rates if an ion can enter
         :param config: state configuration to test
-        :param original_state_index: integer representing the index where _config is in self.channel_configs
+        :param original_state_index: integer representing the index where _config is in
+        self.channel_configs
         :return: none, update self.channel_configs and self.matrix if possible
         """
         # check if the channel config is empty in the first binding site
@@ -133,63 +155,72 @@ class EryingRateModelMaker(object):
             for ion in self.list_ions:
                 _new_config = config[:]  # prevent aliasing
                 _new_config[0] = ion  # add the ion to the existing channel state
-                sites = (0, 1)  # the sites of ion movement are from the extracellular side (0) to the first
-                # binding site (1)
+                sites = (0, 1)  # the sites of ion movement are from the extracellular side (0)
+                # to the first binding site (1)
                 if _new_config not in self.channel_configs:
-                    # if the state has not been seen before, add the state and rates to the channel_config and matrix
-                    self.add_new_state(_new_config, sites, ion, original_state_index)
+                    # if the state has not been seen before, add the state and rates to the
+                    # channel_config and matrix
+                    self._add_new_state(_new_config, sites, ion, original_state_index)
                 else:
                     # else if the state has already been added, just update the rate matrix
                     new_state_index = self.channel_configs.index(_new_config)
-                    self.add_rates(sites, ion, original_state_index, new_state_index)
+                    self._add_rates(sites, ion, original_state_index, new_state_index)
 
-    def check_for_hop(self, config, original_state_index):
+    def _check_for_hop(self, config, original_state_index):
         """
         Check if it is possible for an ion hopping to occur in the channel config, it it
         is possible call the add_hop method to perform the action
         :param config: channel configuration
         :return: none, the channel_config and matrix attributes are updated
         """
-        # check if ion can hop inside the channel by going through each binding site (except the last, that
-        # situation is dealt with in the check_for_ion_exit method)
+        # check if ion can hop inside the channel by going through each binding site
+        # (except the last, that situation is dealt with in the check_for_ion_exit method)
         for site_index in range(self.num_binding_sites-1):
             # check if there is an ion present and a place open for it to move to
             if (config[site_index] != 0) and (config[site_index+1] == 0):
                 _config = config[:]  # copy the state so it is not aliased
-                # it is possible for an ion to move, call the add_hop sub routine to peform the action
-                self.add_hop(_config, site_index, original_state_index)
+                # it is possible for an ion to move, call the add_hop sub routine to
+                # perform the action
+                self._add_hop(_config, site_index, original_state_index)
 
-    def check_for_ion_exit(self, config, original_state_index):
+    def _check_for_ion_exit(self, config, original_state_index):
         """
-        check if it is possible for an ion to exit the channel to the intracellular side (right side of the channel
-        configuration list)
+        check if it is possible for an ion to exit the channel to the intracellular side
+        (right side of the channel configuration list)
         :param config: state configuration to test
-        :param original_state_index: integer representing the index where _config is in self.channel_configs
+        :param original_state_index: integer representing the index where _config is in
+        self.channel_configs
         :return: none, update self.channel_configs and self.matrix if possible
         """
-        # check if an ion is in the binding site next to the intracelluar side and can move out of the channel
+        # check if an ion is in the binding site next to the intracelluar side and can move out
+        # of the channel
         if config[-1] != 0:
             _new_config = config[:]  # prevent aliasing by make a new deep copy
             ion = config[-1]  # get the ion that can move out so that the proper rate can be made
             _new_config[-1] = 0  # make the new configuration state where the ion has exited
-            sites = (self.num_binding_sites, self.num_binding_sites+1)  # the ion moves from the last binding site
-            # (indexed as num_binding_sites) to the extracellular side (indexed as num_binding_sites + 1)
+            # the ion moves from the last binding site
+            sites = (self.num_binding_sites, self.num_binding_sites+1)
+            # (indexed as num_binding_sites) to the extracellular side
+            # (indexed as num_binding_sites + 1)
             if _new_config not in self.channel_configs:
-                # if the state has not been seen before, add the state and rates to the channel_config and matrix
-                self.add_new_state(_new_config, sites, ion, original_state_index)
+                # if the state has not been seen before, add the state and rates to the
+                # channel_config and matrix
+                self._add_new_state(_new_config, sites, ion, original_state_index)
             else:
                 # else if the state has already been added, just update the rate matrix
                 new_state_index = self.channel_configs.index(_new_config)
-                self.add_rates(sites, ion, original_state_index, new_state_index)
+                self._add_rates(sites, ion, original_state_index, new_state_index)
 
-    def add_hop(self, _config, binding_site, original_state_index):
+    def _add_hop(self, _config, binding_site, original_state_index):
         """
-        Take a channel configuration (_config) and move the ion in the binding_site toward the intracellular
-        side, add the corresponding config to the channel_config attribute if it is not already present,
-        add the rates to the matrix
-        :param _config: channel configuration that can allow an ion to hop towards the intracellular side
+        Take a channel configuration (_config) and move the ion in the binding_site toward
+        the intracellular side, add the corresponding config to the channel_config attribute if it
+        is not already present, add the rates to the matrix
+        :param _config: channel configuration that can allow an ion to hop towards the
+        intracellular side
         :param binding_site: number of the binding site that has the ion that is to move
-        :param original_state_index: number that is index of where _config is in the self.channel_configs list
+        :param original_state_index: number that is index of where _config is in the
+        self.channel_configs list
         :return: none, update channel_config and matrix attributes
         """
         ion = _config[binding_site]
@@ -199,12 +230,12 @@ class EryingRateModelMaker(object):
         if _config not in self.channel_configs:
             # the first binding site is labeled as 1, as the extracellular
             # side is 0 so increment the binding_site to reflect this
-            self.add_new_state(_config, sites, ion, original_state_index)
+            self._add_new_state(_config, sites, ion, original_state_index)
         else:  # add the rates in here
             new_state_index = self.channel_configs.index(_config)
-            self.add_rates(sites, ion, original_state_index, new_state_index)
+            self._add_rates(sites, ion, original_state_index, new_state_index)
 
-    def add_new_state(self, _config, sites, ion, original_state_index):
+    def _add_new_state(self, _config, sites, ion, original_state_index):
         """
         Add a new ion channel state to the list of ion channel configurations with
         a new way of distributing the ions in the channel in the binding sites
@@ -219,15 +250,16 @@ class EryingRateModelMaker(object):
         """
         self.channel_configs.append(_config)  # add the configuration to the list of all configs
         if _config not in self.new_channel_configs:
-            self.new_channel_configs.append(_config)  # add the config to list to check for further transitions
+            # add the config to list to check for further transitions
+            self.new_channel_configs.append(_config)
         for i in range(len(self.matrix)):  # add another column to the transition matrix
             self.matrix[i].append('0')
         # add a new row to the bottom of the matrix
         self.matrix.append(['0'] * (len(self.matrix)+1))
 
-        self.add_rates(sites, ion, original_state_index, len(self.channel_configs)-1)
+        self._add_rates(sites, ion, original_state_index, len(self.channel_configs) - 1)
 
-    def add_rates(self, sites, ion, original_state_index, new_config_state_index):
+    def _add_rates(self, sites, ion, original_state_index, new_config_state_index):
         """
         Add rates to the transition matrix
         :param sites: a tuple with two numbers, the first is the binding site number
@@ -235,14 +267,15 @@ class EryingRateModelMaker(object):
         and the second number is the binding site the ion moves to
         :param ion: string with the name of the ion that is moving
         :param original_state_index:  index of the place the state the new state
-        :param new_config_state_index: index of the channel configuration that is being transitioned to
+        :param new_config_state_index: index of the channel configuration that is being
+        transitioned to
         :return:  none, the matrix is updated
         """
         _config = self.channel_configs[original_state_index]
         # make a string that contains the pre-exponential Q values
         if self.q_type:
             ion_charge = self.ion_charges[self.list_ions.index(ion)]
-            q_str_forward, q_str_backward = self.check_for_Q_values(_config, sites[0], ion_charge)
+            q_str_forward, q_str_backward = self._check_for_Q_values(_config, sites[0], ion_charge)
         else:
             q_str_forward, q_str_backward = "", ""
         # make a string to describe the rate for the ion moving to the extracellular side
@@ -264,7 +297,7 @@ class EryingRateModelMaker(object):
         # update the transport rates
         self.forward_transport.update(sites[1], ion, forward_rate_str, original_state_index)
 
-    def add_diagonal_rates(self):
+    def _add_diagonal_rates(self):
         """
         Add the rates along the diagonal of the transition matrix by summing all numbers in
         each column and subtracting from the diagonal element
@@ -284,10 +317,10 @@ class EryingRateModelMaker(object):
             # and add to the diagonal element of that column
             self.matrix[i][i] = _new_rate
 
-    def check_for_Q_values(self, _config, site_index, ion_moving_charge):
+    def _check_for_Q_values(self, _config, site_index, ion_moving_charge):
         """
-        Make a string for the pre exponential Q or R values that account for the increase in the rate
-        of ion movement due to electrostatic repulsion
+        Make a string for the pre exponential Q or R values that account for the increase in
+        the rate of ion movement due to electrostatic repulsion
         :param _config: configuration of the channel to find the Q values for
         :param site_index: binding site the ion is currently in
         :return: string that has the q
@@ -296,8 +329,10 @@ class EryingRateModelMaker(object):
         return_str_backward = ""
         forward_rate = []
         backward_rate = []
-        left_ions = []  # make list of ions that are in sites towards the extracellular side of the current ion
-        right_ions = []  # make list of ions that are in sites towards the intracellular side of the current ion
+        # make list of ions that are in sites towards the extracellular side of the current ion
+        left_ions = []
+        # make list of ions that are in sites towards the intracellular side of the current ion
+        right_ions = []
         for left_site_index in range(0, site_index-1):
             if _config[left_site_index] != 0:  # there is an ion to the left of the hopping ion
                 _ion_in_channel = _config[left_site_index]
@@ -314,7 +349,7 @@ class EryingRateModelMaker(object):
             if left_ion.charge*ion_moving_charge == 1:
                 power_str = ""
             else:
-                power_str = power_symbol + str(left_ion.charge*ion_moving_charge)
+                power_str = POWER_SYMBOL + str(left_ion.charge * ion_moving_charge)
             if 'full Q' in self.q_type:
                 forward_rate.append('Q'
                                     + str(left_ion.place)
@@ -323,19 +358,19 @@ class EryingRateModelMaker(object):
             elif 'single Q' in self.q_type and int(left_ion.place)+1 == site_index:
                 forward_rate.append('Q' + power_str)
 
-            if 'full QR' == self.q_type:
+            if  self.q_type == 'full QR':
                 backward_rate.append('R'
                                      + str(left_ion.place)
                                      + str(site_index+1)
                                      + power_str)
-            elif 'single QR' == self.q_type and int(left_ion.place)+2 == site_index:
+            elif self.q_type == 'single QR' and int(left_ion.place)+2 == site_index:
                 backward_rate.append('R' + power_str)
         for right_ion in right_ions:
             if right_ion.charge*ion_moving_charge == 1:
                 power_str = ""
             else:
-                power_str = power_symbol + str(right_ion.charge*ion_moving_charge)
-            if 'full QR' == self.q_type:
+                power_str = POWER_SYMBOL + str(right_ion.charge * ion_moving_charge)
+            if self.q_type == 'full QR':
                 forward_rate.append('R'
                                     + str(site_index)
                                     + str(right_ion.place)
@@ -343,7 +378,7 @@ class EryingRateModelMaker(object):
             elif 'single QR' in self.q_type and int(right_ion.place)-1 == site_index:
                 forward_rate.append('R' + power_str)
 
-            if ('full Q' in self.q_type):
+            if 'full Q' in self.q_type:
                 backward_rate.append('Q'
                                      + str(site_index+1)
                                      + str(right_ion.place)
@@ -357,7 +392,11 @@ class EryingRateModelMaker(object):
             return_str_backward += " * ".join(backward_rate) + " * "
         return return_str_forward, return_str_backward
 
-    def make_Q_assignment(self):
+    def _make_Q_assignment(self):
+        """
+        Assign the Q (or Qs) and R values
+        :return: bind to self and get with the get_q_str method
+        """
         _str = ""
         q_global_list = []  # make list of Qs to put in global call
         q_list_index = 0
@@ -392,13 +431,24 @@ class EryingRateModelMaker(object):
         self.q_global_list = q_global_list
 
     def get_transport_rate(self, barrier_number, ion):
+        """
+        Get 2 strings that represents the forward and backward transport rates
+        :param barrier_number: number of barriers in the model
+        :param ion: ion to get the rates for
+        :return: rate equations
+        """
         forward_eqn = self.forward_transport.output_rate(barrier_number, ion)
         backward_eqn = self.backward_transport.output_rate(barrier_number, ion)
         return forward_eqn, backward_eqn
 
     def get_forward_transport_rates_str(self):
+        """
+        Get a string that represents all the forward transport rates
+        :return:  string
+        """
         _str = "    inward = dict()\n"
-        zeros_string = '0, ' * (self.num_binding_sites + 1)  # +1 because there is one more barrier than binding site
+        zeros_string = '0, ' * (self.num_binding_sites + 1)  # +1 because there is one
+                                                             # more barrier than binding site
         init_string = "'] = [" + zeros_string[:-2] + "]\n"
         for ion in self.list_ions:
             _str += "    inward['" + ion + init_string
@@ -411,8 +461,13 @@ class EryingRateModelMaker(object):
         return _str
 
     def get_backward_transport_rates_str(self):
+        """
+        Get a string that represents all the backward transport rates
+        :return:  string
+        """
         _str = "    outward = dict()\n"
-        zeros_string = '0, ' * (self.num_binding_sites + 1)  # +1 because there is one more barrier than binding site
+        zeros_string = '0, ' * (self.num_binding_sites + 1)  # +1 because there is one
+                                                             # more barrier than binding site
         init_string = "'] = [" + zeros_string[:-2] + "]\n"
         for ion in self.list_ions:
             _str += "    outward['" + ion + init_string
@@ -424,12 +479,24 @@ class EryingRateModelMaker(object):
         return _str
 
     def get_transition_matrix(self):
+        """
+        Get the matrix
+        :return:
+        """
         return self.matrix
 
     def get_states_vector(self):
+        """
+        Get the states used
+        :return:
+        """
         return self.channel_configs
 
     def get_states_str(self):
+        """
+        Get a string that represents the states in the model
+        :return:  string
+        """
         _str = "states = ["
         for state in self.channel_configs:
             _str += str(state) + ',\n          '
@@ -437,6 +504,10 @@ class EryingRateModelMaker(object):
         return _str
 
     def get_matrix_str(self):
+        """
+        Get a string that represents the matrix that was made
+        :return: string
+        """
         output_str = 'matrix([\n    '
         for row in self.matrix:
             output_str += str(row) + ',\n    '
@@ -445,16 +516,28 @@ class EryingRateModelMaker(object):
         return output_str
 
     def get_number_states(self):
+        """
+        Get the number of total states in the model
+        :return: int
+        """
         return len(self.channel_configs)
 
     def get_q_str(self):
+        """
+        Return a string assigning to Q values from a list
+        :return: string
+        """
         return self.q_str
 
     def get_qr_global_str(self):
+        """
+        Gets a string that will set the appropraite Q and Rs as global variables
+        :return: string
+        """
         if self.num_binding_sites < 2:  # if there is only 1 binding site, there are not Qs or Rs
             return ""
         if 'full QR' in self.q_type:  # keep order so if full QR, full Q will not be triggered
-            raise NotImplemented
+            raise NotImplementedError
         elif 'full Q' in self.q_type:
             _str = "    global "
             _str += ', '.join(self.q_global_list)
@@ -465,6 +548,9 @@ class EryingRateModelMaker(object):
         return _str
 
     def print_matrix(self):
+        """
+        Print out the matrix for testing
+        """
         print 'matrix:'
         for row in self.matrix:
             print row
@@ -494,7 +580,7 @@ class EryingRateModelMaker(object):
     def __str__(self):
         """
         represent the states and matrix in a reader friendly version
-        :return:
+        :return: string representing the states and the matrix
         """
         states_str = "states = \n["
         for state_row in self.channel_configs:
@@ -511,6 +597,11 @@ class EryingRateModelMaker(object):
 
 
 def print_chain(_chain, _configs):
+    """
+    Print out the chain
+    :param _chain: dictionary
+    :param _configs: list
+    """
     for config in _configs:
         for key, value in _chain[tuple(config)].iteritems():
             print key, value
@@ -518,31 +609,31 @@ def print_chain(_chain, _configs):
 
 
 if __name__ == "__main__":
-    instance = EryingRateModelMaker(2, ['Na', 'Ca'], [1, 2, 2], 'full QR')
+    INSTANCE = EryingRateModelMaker(2, ['Na', 'Ca'], [1, 2, 2], 'full QR')
     # print instance.get_states_str()
     # print instance.get_matrix_str()
     if False:
-        forward_trans_eqn, backward_trans_eqn = instance.get_transport_rate(1, 'Ca')
-        print forward_trans_eqn
+        FORWARD_EQN, BACKWARDS_EQN = INSTANCE.get_transport_rate(1, 'Ca')
+        print FORWARD_EQN
         print 'split'
-        print backward_trans_eqn
+        print BACKWARDS_EQN
         print 'break'
-        forward_trans_eqn, backward_trans_eqn = instance.get_transport_rate(1, 'Na')
-        print forward_trans_eqn
+        FORWARD_EQN, BACKWARDS_EQN = INSTANCE.get_transport_rate(1, 'Na')
+        print FORWARD_EQN
         print 'split'
-        print backward_trans_eqn
+        print BACKWARDS_EQN
         print 'break1'
-        forward_trans_eqn, backward_trans_eqn = instance.get_transport_rate(0, 'Na')
-        print forward_trans_eqn
+        FORWARD_EQN, BACKWARDS_EQN = INSTANCE.get_transport_rate(0, 'Na')
+        print FORWARD_EQN
         print 'split'
-        print backward_trans_eqn
+        print BACKWARDS_EQN
 
-    hold_f = instance.get_forward_transport_rates_str()
-    hold_b = instance.get_backward_transport_rates_str()
-    print instance.get_qr_global_str()
+    HOLD_FORWARD = INSTANCE.get_forward_transport_rates_str()
+    HOLD_BACKWARDS = INSTANCE.get_backward_transport_rates_str()
+    print INSTANCE.get_qr_global_str()
     print ""
-    print hold_f[:-1]
+    print HOLD_FORWARD[:-1]
     print ""
-    print hold_b[:-1]
+    print HOLD_BACKWARDS[:-1]
     # forward_trans_eqn, backward_trans_eqn = instance.get_transport_rate(2, 'Na')
     # print forward_trans_eqn
