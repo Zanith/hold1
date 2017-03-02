@@ -5,6 +5,7 @@
 """
 # standard libraries
 import Tkinter as tk
+import sys
 import tkFileDialog
 
 import eyring_rate_script
@@ -19,9 +20,9 @@ __author__ = 'Kyle Vitautas Lopin'
 MAX_CHARGE = 5
 FILEOPTIONS = {'defaultextension': '*.ert_model'}
 FILEOPTIONS['filetypes'] = (("Eyring_rate_model", ".ert_model"),)
-TESTING = False
-SAVE_FILENAME = 'wide'
-MP_DPS_VALUE = 15
+TESTING = True
+SAVE_FILENAME = 'random2'
+MP_DPS_VALUE = 80
 
 
 class EyringGUI(tk.Tk):
@@ -176,6 +177,7 @@ class EyringGUI(tk.Tk):
         barriers = self.parameter_frame.energy_barriers
         # results have the class Results found in numpy_helper_functions and has the attributes
         # voltage, matrix_specs, ion_transport self.fitting,  current and steady_state
+
         results_eig, results_svd, results_qr = eyring_rate_script.eyring_rate_algo(voltages,
                                                                                    concentrations,
                                                                                    barriers,
@@ -184,11 +186,11 @@ class EyringGUI(tk.Tk):
                                                                                    mp_dps=MP_DPS_VALUE)
 
         solutes = []
-        for solute in results_eig[0].ion_transport:
+        for solute in results_qr[0].ion_transport:
             solutes.append(solute)
-
-        r1 = result_disp.MultiPlotWindows(self, voltages, barriers, results_eig,
-                                          solutes, conc_labels, "Eig results")
+        if results_eig:
+            r1 = result_disp.MultiPlotWindows(self, voltages, barriers, results_eig,
+                                              solutes, conc_labels, "Eig results")
 
         r2 = result_disp.MultiPlotWindows(self, voltages, barriers, results_svd,
                                           solutes, conc_labels, "SVD results")
@@ -214,6 +216,46 @@ class EyringGUI(tk.Tk):
             r3.save_data(filename)
             r3.save_custom_data(filename)
             r3.save_custom_data2(filename)
+        # rerun with new MP_DPS
+        # MP_DPS_VALUE = 15
+        # results_eig, results_svd, results_qr = eyring_rate_script.eyring_rate_algo(voltages,
+        #                                                                            concentrations,
+        #                                                                            barriers,
+        #                                                                            Qs=self.Q_value,
+        #                                                                            Rs=self.R_value,
+        #                                                                            mp_dps=MP_DPS_VALUE)
+        #
+        # solutes = []
+        # for solute in results_qr[0].ion_transport:
+        #     solutes.append(solute)
+        # if results_eig:
+        #     r1 = result_disp.MultiPlotWindows(self, voltages, barriers, results_eig,
+        #                                       solutes, conc_labels, "Eig results")
+        #
+        # r2 = result_disp.MultiPlotWindows(self, voltages, barriers, results_svd,
+        #                                   solutes, conc_labels, "SVD results")
+        #
+        # r3 = result_disp.MultiPlotWindows(self, voltages, barriers, results_qr,
+        #                                   solutes, conc_labels, "QR results")
+        #
+        # if TESTING:
+        #     print 'testing with: ', num_sites, MP_DPS_VALUE, len(solutes)
+        #     if self.initial_frame.mpmath_used:
+        #         math_str = 'mp_' + str(MP_DPS_VALUE) + 'dps'
+        #     else:
+        #         math_str = 'np'
+        #
+        #     filename = (str(num_sites) + 'x' + str(len(solutes)) + '_'
+        #                 + SAVE_FILENAME + '_' + math_str + '.csv')
+        #     r1.save_data(filename)
+        #     r1.save_custom_data(filename)
+        #     r1.save_custom_data2(filename)
+        #     r2.save_data(filename)
+        #     r2.save_custom_data(filename)
+        #     r2.save_custom_data2(filename)
+        #     r3.save_data(filename)
+        #     r3.save_custom_data(filename)
+        #     r3.save_custom_data2(filename)
 
     def get_settings(self, initial_settings):
         """
@@ -281,6 +323,7 @@ class EyringGUI(tk.Tk):
                 self.initial_frame.num_solutes.set(num_solutes)
                 # get the charges saved and convert the string into ints
                 charges_str = self.find_between(model, '\ncharges: ', ' \n').split(' ')
+                print charges_str
                 charges = [int(x) for x in charges_str]
                 # make a solute entry for each solute loaded with the corresponding charge value
                 for i, solute in enumerate(solutes):
@@ -297,7 +340,8 @@ class EyringGUI(tk.Tk):
                     self.initial_frame.Q_on_off.set(1)  # check the Q valued used box
                     self.initial_frame.Q_check_call()  # update the value in the initializing frame
                     # set the Q value, convert the string to float
-                    self.initial_frame.Q_value = float(self.find_between(model, 'Q factor: ', '\n'))
+                    self.initial_frame.Q_value.set(float(self.find_between(model,
+                                                                           'Q factor: ', '\n')))
             # the file may not have the other simulation values so check first
             if 'energy barriers:' in model:
                 # the model has a parameter and simulation frame settings
@@ -337,7 +381,9 @@ class EyringGUI(tk.Tk):
             top.geometry("300x200")
             tk.Message(top, text="Can not load file").pack()
             tk.Button(top, text="Exit", command=top.destroy).pack(side='bottom')
-            print error
+            print 'loading error: ', error
+            sys_hold = sys.exc_info()
+            print 'line no: ', sys_hold[2].tb_lineno
 
     @staticmethod
     def find_between(target, _start, _end):
@@ -352,7 +398,8 @@ class EyringGUI(tk.Tk):
         """
         solutes, charges = self.get_settings(self.initial_frame)
         if self.initial_frame.Q_value_used:
-            _Qstr = 'Q factor: ' + str(self.initial_frame.Q_value)
+            print type(self.initial_frame.Q_value), self.initial_frame.Q_value
+            _Qstr = 'Q factor: ' + str(self.initial_frame.Q_value.get())
         else:
             _Qstr = 'no Q factor'
         filename = tkFileDialog.asksaveasfilename(**FILEOPTIONS)
@@ -367,6 +414,7 @@ class EyringGUI(tk.Tk):
             model_file.write('\ncharges: ')
             for charge in charges:
                 model_file.write('%d ' % charge)
+            print 'Q str: ', _Qstr
             model_file.write('\n%s\n' % _Qstr)
             if self.parameter_frame:
                 model_file.write('energy barriers: ')
